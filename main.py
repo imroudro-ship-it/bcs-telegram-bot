@@ -356,6 +356,9 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
     import html
 
 
+import html
+
+
 def send_telegram_package(vocab_list, excel_file):
     # 1. Send Text Digest safely
     message = "<b>📚 DAILY STAR 100-WORD VOCABULARY BANK</b>\n"
