@@ -34,12 +34,12 @@ EXCEL_FILE = DATA_DIR / "Vocabulary_Bank.xlsx"
 
 # ===================== CONFIG =====================
 TIMEZONE = pytz.timezone("Asia/Dhaka")
-RSS_FEEDS = [
-    "https://www.thedailystar.net/rss.xml",
-    "https://www.dhakatribune.com/feed",
-    "https://www.tbsnews.net/rss.xml",
-    "https://www.newagebd.net/rss.xml",
-]
+RSS_FEEDS = {
+    "The Daily Star": "https://www.thedailystar.net/rss.xml",
+    "Dhaka Tribune": "https://www.dhakatribune.com/feed",
+    "The Business Standard": "https://www.tbsnews.net/rss.xml",
+    "New Age": "https://www.newagebd.net/rss.xml",
+}
 
 # ===================== HELPER: SAFELY CONVERT TO EXCEL STRING =====================
 def safe_excel_value(value):
@@ -62,37 +62,46 @@ def save_history(words):
     with open(HISTORY_FILE, "w") as f:
         json.dump({"words": words}, f)
 
-# ===================== FETCH HEADLINES =====================
+# ===================== FETCH HEADLINES WITH SOURCES =====================
 def fetch_headlines():
-    all_headlines = []
-    for url in RSS_FEEDS:
+    """
+    Returns a list of dicts: [{"headline": str, "source": str}, ...]
+    """
+    all_entries = []
+    for source, url in RSS_FEEDS.items():
         try:
             feed = feedparser.parse(url)
             for entry in feed.entries[:5]:
-                all_headlines.append(entry.title)
-        except:
-            pass
+                all_entries.append({
+                    "headline": entry.title,
+                    "source": source
+                })
+        except Exception as e:
+            print(f"⚠️ Failed to fetch {source}: {e}")
+
+    # Remove duplicates (keep first occurrence)
     seen = set()
-    unique = []
-    for h in all_headlines:
-        if h not in seen:
-            seen.add(h)
-            unique.append(h)
-    return unique[:25]
+    unique_entries = []
+    for entry in all_entries:
+        if entry["headline"] not in seen:
+            seen.add(entry["headline"])
+            unique_entries.append(entry)
+    return unique_entries[:25]
 
 # ===================== GENERATE VOCAB + SUMMARY =====================
 def setup_groq():
     return groq.Groq(api_key=GROQ_API_KEY)
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-def generate_vocab_and_summary(client, headlines, past_words):
-    headlines_text = "\n".join([f"- {h}" for h in headlines])
+def generate_vocab_and_summary(client, headlines_data, past_words):
+    # headlines_data is list of dicts with "headline" and "source"
+    headlines_text = "\n".join([f"- [{entry['source']}] {entry['headline']}" for entry in headlines_data])
     exclude = ", ".join(past_words[-50:])
 
     prompt = f"""
 You are an expert BCS and Bank job exam mentor.
 
-Today's headlines from Bangladeshi newspapers:
+Today's headlines from Bangladeshi newspapers (with sources):
 {headlines_text}
 
 ### Task 1: Generate 100 vocabulary words (numbered 1-100) from these headlines.
@@ -110,7 +119,7 @@ Today's headlines from Bangladeshi newspapers:
   - "example" (string, exam-standard sentence using the word)
   - "category" (string, e.g., Economy, Politics, Law, Environment, Health)
 
-### Task 2: Write a 5-7 bullet Bengali summary of the most important topics.
+### Task 2: Write a 5-7 bullet Bengali summary of the most important topics. Include the newspaper names in the summary.
 
 Return JSON with keys: "vocab_list" (array) and "bengali_summary" (string).
 """
@@ -128,25 +137,45 @@ Return JSON with keys: "vocab_list" (array) and "bengali_summary" (string).
     vocab = data.get("vocab_list", [])
     summary = data.get("bengali_summary", "")
 
-    # **DEBUG: Print the first item to see keys**
-    if vocab:
-        print("📝 First vocab item keys:", vocab[0].keys())
-        print("📝 First vocab item:", json.dumps(vocab[0], indent=2, ensure_ascii=False))
-
-    # **Fallback: if keys are missing, try to map aliases**
+    # Fallback mapping for alternative keys
     for item in vocab:
-        # If 'bengali' is missing but 'bengali_meaning' exists, copy it
         if "bengali" not in item and "bengali_meaning" in item:
             item["bengali"] = item["bengali_meaning"]
         if "example" not in item and "example_sentence" in item:
             item["example"] = item["example_sentence"]
-        # Ensure all keys exist with empty string as fallback
         for key in ["sl", "word", "pos", "level", "bengali", "definition", "synonyms", "antonyms", "example", "category"]:
             if key not in item:
                 item[key] = ""
 
+    # If summary is empty, build a fallback
+    if not summary or len(summary.strip()) < 10:
+        summary = build_fallback_summary(headlines_data)
+
     return vocab, summary
 
+def build_fallback_summary(headlines_data):
+    """
+    Create a simple Bengali summary with newspaper names and top headlines.
+    """
+    # Group headlines by source
+    sources = {}
+    for entry in headlines_data:
+        src = entry["source"]
+        if src not in sources:
+            sources[src] = []
+        sources[src].append(entry["headline"])
+
+    summary = "📰 **আজকের প্রধান সংবাদ (সূত্র সহ)**\n\n"
+    for src, headlines in sources.items():
+        summary += f"▪️ **{src}**\n"
+        for h in headlines[:3]:  # top 3 per source
+            summary += f"   - {h}\n"
+        summary += "\n"
+
+    summary += "🔹 অন্যান্য সংবাদপত্র থেকেও গুরুত্বপূর্ণ শব্দ সংগ্রহ করা হয়েছে।"
+    return summary
+
+# ===================== GENERATE MCQs =====================
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def generate_mcqs(client, vocab_list):
     selected = random.sample(vocab_list, min(10, len(vocab_list)))
@@ -204,7 +233,7 @@ Each object must have keys: question, options, answer, explanation.
         print(f"⚠️ MCQs parsing error: {e}")
         return []
 
-# ===================== BUILD EXCEL (same as before, but uses safe_excel_value) =====================
+# ===================== BUILD EXCEL =====================
 def build_excel(vocab_list, mcqs):
     wb = openpyxl.Workbook()
 
@@ -343,17 +372,17 @@ def build_excel(vocab_list, mcqs):
 # ===================== CORE JOB LOGIC =====================
 async def run_daily_job(bot=None):
     client = setup_groq()
-    headlines = fetch_headlines()
-    if not headlines:
+    headlines_data = fetch_headlines()
+    if not headlines_data:
         return "No headlines found."
 
     past = load_history()
-    vocab, summary = generate_vocab_and_summary(client, headlines, past)
+    # Extract just headlines for prompt (but we also pass full data for summary)
+    vocab, summary = generate_vocab_and_summary(client, headlines_data, past)
     with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
         f.write(summary)
 
     mcqs = generate_mcqs(client, vocab)
-
     build_excel(vocab, mcqs)
     save_history(past + [w["word"] for w in vocab])
 
@@ -362,7 +391,8 @@ async def run_daily_job(bot=None):
         if chat_id:
             with open(EXCEL_FILE, "rb") as f:
                 await bot.send_document(chat_id=chat_id, document=f, caption="📊 Daily Vocabulary Bank (auto-generated)")
-            await bot.send_message(chat_id=chat_id, text=f"📰 **Summary**\n\n{summary}", parse_mode="Markdown")
+            # Send summary (now guaranteed to have content)
+            await bot.send_message(chat_id=chat_id, text=f"📰 **Today's Summary**\n\n{summary}", parse_mode="Markdown")
         return "Sent successfully."
     else:
         return "Generated successfully."
@@ -398,12 +428,13 @@ async def quiz_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("⏳ Generating quiz...")
     try:
         client = setup_groq()
-        headlines = fetch_headlines()
-        if not headlines:
+        headlines_data = fetch_headlines()
+        if not headlines_data:
             await update.message.reply_text("⚠️ No headlines.")
             return
         past = load_history()
-        vocab, _ = generate_vocab_and_summary(client, headlines, past)
+        # Use generate_vocab_and_summary but we only need vocab (and it also returns summary)
+        vocab, _ = generate_vocab_and_summary(client, headlines_data, past)
         mcqs = generate_mcqs(client, vocab)
         if not mcqs:
             await update.message.reply_text("⚠️ Could not generate MCQs. Please try again later.")
