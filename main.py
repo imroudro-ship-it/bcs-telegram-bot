@@ -41,6 +41,18 @@ RSS_FEEDS = [
     "https://www.newagebd.net/rss.xml",
 ]
 
+# ===================== HELPER: SAFELY CONVERT TO EXCEL STRING =====================
+def safe_excel_value(value):
+    """Convert any value to a string suitable for Excel."""
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value)
+    if isinstance(value, dict):
+        # If it's a dict, maybe we want a string representation, but we shouldn't get this.
+        return str(value)
+    return str(value)
+
 # ===================== HISTORY =====================
 def load_history():
     if os.path.exists(HISTORY_FILE):
@@ -90,6 +102,7 @@ Today's headlines from Bangladeshi newspapers:
 - Difficulty: 30 Basic, 40 Intermediate, 30 Advanced.
 - Do NOT repeat: {exclude}
 - For each word provide: word, pos, level, bengali meaning, definition, synonyms, antonyms, example sentence, category.
+- IMPORTANT: For synonyms and antonyms, provide them as a **comma-separated string**, not a list.
 
 ### Task 2: Write a 5-7 bullet Bengali summary of the most important topics.
 
@@ -174,15 +187,15 @@ def build_excel(vocab_list, mcqs):
         ws.row_dimensions[idx].height = 26
         row_data = [
             item.get("sl", idx-4),
-            item.get("word", ""),
-            item.get("pos", ""),
-            item.get("level", ""),
-            item.get("bengali", ""),
-            item.get("definition", ""),
-            item.get("synonyms", ""),
-            item.get("antonyms", ""),
-            item.get("example", ""),
-            item.get("category", "")
+            safe_excel_value(item.get("word", "")),
+            safe_excel_value(item.get("pos", "")),
+            safe_excel_value(item.get("level", "")),
+            safe_excel_value(item.get("bengali", "")),
+            safe_excel_value(item.get("definition", "")),
+            safe_excel_value(item.get("synonyms", "")),
+            safe_excel_value(item.get("antonyms", "")),
+            safe_excel_value(item.get("example", "")),
+            safe_excel_value(item.get("category", ""))
         ]
         for col, val in enumerate(row_data, 1):
             cell = ws.cell(row=idx, column=col)
@@ -252,11 +265,12 @@ def build_excel(vocab_list, mcqs):
 
     for i, q in enumerate(mcqs, 4):
         ws3.cell(row=i, column=1, value=i-3)
-        ws3.cell(row=i, column=2, value=q["question"]).alignment = Alignment(wrap_text=True)
-        for j, opt in enumerate(q["options"], 3):
-            ws3.cell(row=i, column=j, value=opt)
-        ws3.cell(row=i, column=7, value=q["answer"]).alignment = Alignment(horizontal="center")
-        ws3.cell(row=i, column=8, value=q["explanation"]).alignment = Alignment(wrap_text=True)
+        ws3.cell(row=i, column=2, value=safe_excel_value(q.get("question", ""))).alignment = Alignment(wrap_text=True)
+        opts = q.get("options", [])
+        for j, opt in enumerate(opts, 3):
+            ws3.cell(row=i, column=j, value=safe_excel_value(opt))
+        ws3.cell(row=i, column=7, value=safe_excel_value(q.get("answer", ""))).alignment = Alignment(horizontal="center")
+        ws3.cell(row=i, column=8, value=safe_excel_value(q.get("explanation", ""))).alignment = Alignment(wrap_text=True)
 
     for col in range(1, 9):
         ws3.column_dimensions[get_column_letter(col)].width = 20 if col != 2 else 40
