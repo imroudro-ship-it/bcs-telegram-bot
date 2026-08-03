@@ -1,5 +1,8 @@
 groq
-openpyxl
-requests
 feedparser
+openpyxl
+python-telegram-bot==20.7
+apscheduler
+pytz
 tenacity
+requests
