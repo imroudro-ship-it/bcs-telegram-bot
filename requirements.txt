@@ -6,3 +6,4 @@ apscheduler
 pytz
 tenacity
 requests
+jinja2
