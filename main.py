@@ -43,13 +43,11 @@ RSS_FEEDS = [
 
 # ===================== HELPER: SAFELY CONVERT TO EXCEL STRING =====================
 def safe_excel_value(value):
-    """Convert any value to a string suitable for Excel."""
     if value is None:
         return ""
     if isinstance(value, list):
         return ", ".join(str(v) for v in value)
     if isinstance(value, dict):
-        # If it's a dict, try to get a string representation, but this shouldn't happen.
         return str(value)
     return str(value)
 
@@ -74,7 +72,6 @@ def fetch_headlines():
                 all_headlines.append(entry.title)
         except:
             pass
-    # Remove duplicates
     seen = set()
     unique = []
     for h in all_headlines:
@@ -101,8 +98,17 @@ Today's headlines from Bangladeshi newspapers:
 ### Task 1: Generate 100 vocabulary words (numbered 1-100) from these headlines.
 - Difficulty: 30 Basic, 40 Intermediate, 30 Advanced.
 - Do NOT repeat: {exclude}
-- For each word provide: word, pos, level, bengali meaning, definition, synonyms, antonyms, example sentence, category.
-- IMPORTANT: For synonyms and antonyms, provide them as a **comma-separated string**, not a list.
+- For each word provide EXACTLY these keys:
+  - "sl" (number)
+  - "word" (string)
+  - "pos" (string, e.g., Noun, Verb, Adjective)
+  - "level" (string, one of: Basic, Intermediate, Advanced)
+  - "bengali" (string, natural Bengali meaning)
+  - "definition" (string, brief English definition)
+  - "synonyms" (comma-separated string)
+  - "antonyms" (comma-separated string)
+  - "example" (string, exam-standard sentence using the word)
+  - "category" (string, e.g., Economy, Politics, Law, Environment, Health)
 
 ### Task 2: Write a 5-7 bullet Bengali summary of the most important topics.
 
@@ -111,7 +117,7 @@ Return JSON with keys: "vocab_list" (array) and "bengali_summary" (string).
 
     response = client.chat.completions.create(
         messages=[
-            {"role": "system", "content": "You are an expert Bengali lexicographer. Output valid JSON."},
+            {"role": "system", "content": "You are an expert Bengali lexicographer. Always output valid JSON. Use exactly the keys specified."},
             {"role": "user", "content": prompt}
         ],
         model="llama-3.3-70b-versatile",
@@ -119,11 +125,30 @@ Return JSON with keys: "vocab_list" (array) and "bengali_summary" (string).
         response_format={"type": "json_object"},
     )
     data = json.loads(response.choices[0].message.content)
-    return data.get("vocab_list", []), data.get("bengali_summary", "")
+    vocab = data.get("vocab_list", [])
+    summary = data.get("bengali_summary", "")
+
+    # **DEBUG: Print the first item to see keys**
+    if vocab:
+        print("📝 First vocab item keys:", vocab[0].keys())
+        print("📝 First vocab item:", json.dumps(vocab[0], indent=2, ensure_ascii=False))
+
+    # **Fallback: if keys are missing, try to map aliases**
+    for item in vocab:
+        # If 'bengali' is missing but 'bengali_meaning' exists, copy it
+        if "bengali" not in item and "bengali_meaning" in item:
+            item["bengali"] = item["bengali_meaning"]
+        if "example" not in item and "example_sentence" in item:
+            item["example"] = item["example_sentence"]
+        # Ensure all keys exist with empty string as fallback
+        for key in ["sl", "word", "pos", "level", "bengali", "definition", "synonyms", "antonyms", "example", "category"]:
+            if key not in item:
+                item[key] = ""
+
+    return vocab, summary
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def generate_mcqs(client, vocab_list):
-    # Select 10 random words
     selected = random.sample(vocab_list, min(10, len(vocab_list)))
     word_list = [w["word"] for w in selected]
 
@@ -137,12 +162,6 @@ For each question, provide:
 
 Return a JSON array of objects. The array must contain exactly 10 objects.
 Each object must have keys: question, options, answer, explanation.
-
-Example format:
-[
-  {{"question": "What does 'X' mean?", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "A", "explanation": "..."}},
-  ...
-]
 """
 
     response = client.chat.completions.create(
@@ -157,14 +176,12 @@ Example format:
 
     try:
         raw = json.loads(response.choices[0].message.content)
-        # If the response is a dict with a key like "mcqs", extract it
         if isinstance(raw, dict):
             if "mcqs" in raw:
                 mcqs = raw["mcqs"]
             elif "questions" in raw:
                 mcqs = raw["questions"]
             else:
-                # Maybe it's the array itself but wrapped? Try to find first array value
                 for v in raw.values():
                     if isinstance(v, list):
                         mcqs = v
@@ -176,20 +193,18 @@ Example format:
         else:
             mcqs = []
 
-        # Validate each item is a dict with required keys
         validated = []
         for q in mcqs:
             if isinstance(q, dict) and all(k in q for k in ("question", "options", "answer", "explanation")):
                 validated.append(q)
         if len(validated) < 10:
-            # If not enough valid items, we'll fall back to dummy MCQs
             validated = []
         return validated
     except Exception as e:
         print(f"⚠️ MCQs parsing error: {e}")
         return []
 
-# ===================== BUILD EXCEL =====================
+# ===================== BUILD EXCEL (same as before, but uses safe_excel_value) =====================
 def build_excel(vocab_list, mcqs):
     wb = openpyxl.Workbook()
 
@@ -197,7 +212,6 @@ def build_excel(vocab_list, mcqs):
     ws = wb.active
     ws.title = "Vocabulary"
 
-    # Styling
     navy = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
     light_navy = PatternFill(start_color="2F5597", end_color="2F5597", fill_type="solid")
     even = PatternFill(start_color="F2F5F9", end_color="F2F5F9", fill_type="solid")
@@ -205,7 +219,6 @@ def build_excel(vocab_list, mcqs):
     border = Border(left=Side(style="thin"), right=Side(style="thin"),
                     top=Side(style="thin"), bottom=Side(style="thin"))
 
-    # Title
     ws.merge_cells("A1:J1")
     ws["A1"] = "DAILY VOCABULARY BANK - BCS & JOB PREP"
     ws["A1"].font = Font(size=16, bold=True, color="FFFFFF")
@@ -218,7 +231,6 @@ def build_excel(vocab_list, mcqs):
     ws["A2"].fill = light_navy
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
 
-    # Headers
     headers = ["SL", "Word", "POS", "Level", "Bengali", "Definition",
                "Synonyms", "Antonyms", "Example", "Category"]
     for col, h in enumerate(headers, 1):
@@ -228,7 +240,6 @@ def build_excel(vocab_list, mcqs):
         cell.fill = navy
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    # Data
     for idx, item in enumerate(vocab_list, 5):
         ws.row_dimensions[idx].height = 26
         row_data = [
@@ -252,7 +263,6 @@ def build_excel(vocab_list, mcqs):
             if col in [1, 3, 4]:
                 cell.alignment = Alignment(horizontal="center", vertical="center")
 
-            # Color by level
             if col == 4:
                 level = str(val).strip().capitalize()
                 if level == "Basic":
@@ -265,12 +275,10 @@ def build_excel(vocab_list, mcqs):
                     cell.fill = PatternFill(start_color="FFEBEE", end_color="FFEBEE", fill_type="solid")
                     cell.font = Font(bold=True, color="C62828")
 
-    # Column widths
     widths = [8, 20, 15, 16, 28, 35, 32, 30, 45, 22]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
-    # Auto-filter
     ws.auto_filter.ref = f"A4:J{len(vocab_list)+4}"
     ws.freeze_panes = "B5"
 
@@ -282,7 +290,6 @@ def build_excel(vocab_list, mcqs):
     ws2["A1"].fill = navy
     ws2["A1"].alignment = Alignment(horizontal="center")
 
-    # Level counts
     ws2["A3"] = "Level"
     ws2["B3"] = "Count"
     ws2["C3"] = "%"
@@ -295,7 +302,7 @@ def build_excel(vocab_list, mcqs):
     ws2["B7"] = "=SUM(B4:B6)"
     ws2["C7"] = "=SUM(C4:C6)"
 
-    # Sheet 3: Practice Test (only if we have valid MCQs)
+    # Sheet 3: Practice Test
     if mcqs and isinstance(mcqs, list) and all(isinstance(q, dict) for q in mcqs):
         ws3 = wb.create_sheet("Practice Test")
         ws3.merge_cells("A1:F1")
@@ -323,7 +330,6 @@ def build_excel(vocab_list, mcqs):
             ws3.column_dimensions[get_column_letter(col)].width = 20 if col != 2 else 40
         ws3.freeze_panes = "A4"
     else:
-        # Optionally create a placeholder sheet
         ws3 = wb.create_sheet("Practice Test")
         ws3.merge_cells("A1:F1")
         ws3["A1"] = "Practice Test - Not Generated (API issue)"
@@ -336,7 +342,6 @@ def build_excel(vocab_list, mcqs):
 
 # ===================== CORE JOB LOGIC =====================
 async def run_daily_job(bot=None):
-    """Generate vocabulary, summary, MCQs, build Excel, and send via bot (if provided)."""
     client = setup_groq()
     headlines = fetch_headlines()
     if not headlines:
@@ -347,7 +352,6 @@ async def run_daily_job(bot=None):
     with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
         f.write(summary)
 
-    # Generate MCQs (may return empty list if fails)
     mcqs = generate_mcqs(client, vocab)
 
     build_excel(vocab, mcqs)
@@ -424,7 +428,6 @@ def main():
     if not GROQ_API_KEY or not TELEGRAM_BOT_TOKEN:
         raise ValueError("Missing GROQ_API_KEY or TELEGRAM_BOT_TOKEN")
 
-    # If running in GitHub Actions, run the scheduled job once and exit
     if os.environ.get("GITHUB_ACTIONS") == "true":
         from telegram import Bot
         bot = Bot(token=TELEGRAM_BOT_TOKEN)
@@ -432,7 +435,6 @@ def main():
         print("GitHub Actions job completed.")
         return
 
-    # Otherwise, start the interactive bot
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("daily", daily))
