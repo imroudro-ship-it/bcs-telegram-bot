@@ -2,9 +2,8 @@ name: Daily BCS Vocabulary Telegram Bot
 
 on:
   schedule:
-    # 7:00 AM Bangladesh Time (1:00 AM UTC)
-    - cron: '0 1 * * *'
-  workflow_dispatch: # Allows manual trigger testing
+    - cron: '0 1 * * *'  # Runs daily at 7:00 AM BD Time
+  workflow_dispatch:
 
 jobs:
   run-bot:
@@ -22,4 +21,9 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run Telegram Bot Script
+        # THIS IS THE CRITICAL SECTION THAT LOADS YOUR SECRETS:
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python main.py
