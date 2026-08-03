@@ -12,10 +12,15 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def fetch_batch_vocab(client, start_sl, count, level_description):
     prompt = f"""
-    Act strictly as a professional BCS and Bangladeshi Competitive Job Exam English Mentor.
+    Act strictly as a professional BCS and Bangladeshi Competitive Job Exam English Mentor, Lexicographer, and Bengali Linguist.
     Generate exactly {count} high-yield vocabulary words (numbered from SL {start_sl} to {start_sl + count - 1}) commonly tested in BCS Preliminary/Written, Bank recruitment, and Judicial service exams, focusing on terms found in daily newspapers like The Daily Star or Prothom Alo.
 
     Difficulty distribution for this batch: {level_description}.
+
+    CRITICAL INSTRUCTIONS FOR BENGALI TRANSLATION:
+    1. Do NOT use literal, direct, or robotic word-for-word machine translation.
+    2. Provide natural, idiomatic Bengali translations consistent with standard Bengali dictionaries (e.g., Bangla Academy / Samsad English-to-Bengali Dictionary).
+    3. Ensure the Bengali meaning accurately reflects the specified Part of Speech (POS) and context as used by native Bengali speakers in formal/exam writing.
 
     Return a valid JSON object with a single key "vocab_list" containing an array of {count} objects.
     Each object must have these keys:
@@ -23,7 +28,7 @@ def fetch_batch_vocab(client, start_sl, count, level_description):
     "word": string,
     "pos": string (Noun, Verb, Adjective, etc.),
     "level": string ("Basic", "Intermediate", or "Advanced"),
-    "bengali": string (Bangla meaning),
+    "bengali": string (High-quality, natural Bangla meaning based on standard dictionaries),
     "definition": string (Brief English definition),
     "synonyms": string (comma-separated),
     "antonyms": string (comma-separated),
@@ -31,13 +36,19 @@ def fetch_batch_vocab(client, start_sl, count, level_description):
     "category": string (e.g., Economy, Politics, Public Health, Law & Judiciary, Environment)
     """
 
+    system_instruction = (
+        "You are an expert Bengali lexicographer and linguist specializing in Bangladeshi competitive job exams (BCS/Bank). "
+        "Always generate accurate, natural, human-like Bengali dictionary meanings instead of literal machine translations. "
+        "Always output valid JSON."
+    )
+
     response = client.chat.completions.create(
         messages=[
-            {"role": "system", "content": "You are a JSON generator for Bangladeshi competitive job exams. Always output valid JSON."},
+            {"role": "system", "content": system_instruction},
             {"role": "user", "content": prompt}
         ],
         model="llama-3.3-70b-versatile",
-        temperature=0.4,
+        temperature=0.3,  # Lower temperature slightly for more accurate dictionary definitions
         response_format={"type": "json_object"}
     )
     
