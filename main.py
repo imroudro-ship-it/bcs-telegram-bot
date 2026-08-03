@@ -22,9 +22,9 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 # ===================== ENVIRONMENT VARIABLES =====================
-GROQ_API_KEY = "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"          # paste your Groq key here
-TELEGRAM_BOT_TOKEN = "8928425869:AAGhj7KjppS5IvXjtXDOrDifFESaOyr16_8"       # paste your bot token
-TELEGRAM_CHAT_ID = "1641716950"              # paste your chat ID
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 HISTORY_FILE = "history.json"
 DATA_DIR = Path("data")
@@ -265,6 +265,34 @@ def build_excel(vocab_list, mcqs):
     wb.save(EXCEL_FILE)
     return EXCEL_FILE
 
+# ===================== CORE JOB LOGIC (used by both scheduled and interactive) =====================
+async def run_daily_job(bot=None):
+    """Generate vocabulary, summary, MCQs, build Excel, and send via bot (if provided)."""
+    client = setup_groq()
+    headlines = fetch_headlines()
+    if not headlines:
+        return "No headlines found."
+
+    past = load_history()
+    vocab, summary = generate_vocab_and_summary(client, headlines, past)
+    with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
+        f.write(summary)
+    mcqs = generate_mcqs(client, vocab)
+    build_excel(vocab, mcqs)
+    save_history(past + [w["word"] for w in vocab])
+
+    # If bot is provided, send the files and summary
+    if bot:
+        chat_id = TELEGRAM_CHAT_ID
+        if chat_id:
+            with open(EXCEL_FILE, "rb") as f:
+                await bot.send_document(chat_id=chat_id, document=f, caption="📊 Daily Vocabulary Bank (auto-generated)")
+            await bot.send_message(chat_id=chat_id, text=f"📰 **Summary**\n\n{summary}", parse_mode="Markdown")
+        return "Sent successfully."
+    else:
+        # Just save and return, useful for local testing
+        return "Generated successfully."
+
 # ===================== TELEGRAM COMMANDS =====================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -279,32 +307,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text("⏳ Generating...")
     try:
-        client = setup_groq()
-        headlines = fetch_headlines()
-        if not headlines:
-            await update.message.reply_text("⚠️ No headlines found.")
-            return
-
-        past = load_history()
-        vocab, summary = generate_vocab_and_summary(client, headlines, past)
-        with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
-            f.write(summary)
-        mcqs = generate_mcqs(client, vocab)
-        build_excel(vocab, mcqs)
-        save_history(past + [w["word"] for w in vocab])
-
-        # Send files
-        with open(EXCEL_FILE, "rb") as f:
-            await context.bot.send_document(
-                chat_id=update.effective_chat.id,
-                document=f,
-                caption="📊 Vocabulary Bank"
-            )
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"📰 **Summary**\n\n{summary}",
-            parse_mode="Markdown"
-        )
+        # Use the bot from context
+        result = await run_daily_job(bot=context.bot)
+        await update.message.reply_text("✅ " + result)
         await msg.delete()
     except Exception as e:
         await update.message.reply_text(f"❌ Error: {e}")
@@ -317,12 +322,9 @@ async def summary_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No summary yet. Use /daily first.")
 
 async def quiz_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Generate MCQs on the fly
     await update.message.reply_text("⏳ Generating quiz...")
     try:
         client = setup_groq()
-        # Need some vocab - read from Excel or regenerate
-        # For simplicity, we regenerate fresh from headlines
         headlines = fetch_headlines()
         if not headlines:
             await update.message.reply_text("⚠️ No headlines.")
@@ -341,45 +343,27 @@ async def quiz_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Quiz error: {e}")
 
-# ===================== SCHEDULED JOB =====================
+# ===================== SCHEDULED JOB (called by APScheduler) =====================
 async def scheduled_job(context: ContextTypes.DEFAULT_TYPE):
-    chat_id = TELEGRAM_CHAT_ID
-    if not chat_id:
-        return
-    try:
-        client = setup_groq()
-        headlines = fetch_headlines()
-        if not headlines:
-            return
-        past = load_history()
-        vocab, summary = generate_vocab_and_summary(client, headlines, past)
-        with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
-            f.write(summary)
-        mcqs = generate_mcqs(client, vocab)
-        build_excel(vocab, mcqs)
-        save_history(past + [w["word"] for w in vocab])
-
-        with open(EXCEL_FILE, "rb") as f:
-            await context.bot.send_document(
-                chat_id=chat_id,
-                document=f,
-                caption="📊 Daily Vocabulary Bank (auto-generated)"
-            )
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"📰 **Summary**\n\n{summary}",
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        await context.bot.send_message(chat_id=chat_id, text=f"❌ Auto-job failed: {e}")
+    await run_daily_job(bot=context.bot)
 
 # ===================== MAIN =====================
 def main():
     if not GROQ_API_KEY or not TELEGRAM_BOT_TOKEN:
         raise ValueError("Missing GROQ_API_KEY or TELEGRAM_BOT_TOKEN")
 
-    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    # If running in GitHub Actions, run the scheduled job once and exit
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        # Create a bot instance to send messages
+        from telegram import Bot
+        bot = Bot(token=TELEGRAM_BOT_TOKEN)
+        # Run the job asynchronously
+        asyncio.run(run_daily_job(bot=bot))
+        print("GitHub Actions job completed.")
+        return
 
+    # Otherwise, start the interactive bot
+    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("daily", daily))
     app.add_handler(CommandHandler("summary", summary_cmd))
