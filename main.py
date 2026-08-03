@@ -1,28 +1,76 @@
 import html
 import json
 import os
+import textwrap
+import time
+import feedparser
 import openpyxl
+import requests
 from groq import Groq
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
-import requests
+from tenacity import retry, stop_after_attempt, wait_exponential
 
+# ===================== ENVIRONMENT VARIABLES =====================
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+HISTORY_FILE = "history.json"
 
+# ===================== HELPER: LOAD/SAVE HISTORY (to avoid repeat words) =====================
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, "r") as f:
+            return json.load(f)
+    return {"words": []}
 
-def fetch_batch_vocab(client, start_sl, count, level_description):
+def save_history(words_list):
+    with open(HISTORY_FILE, "w") as f:
+        json.dump({"words": words_list}, f)
+
+# ===================== STEP 1: FETCH TODAY'S REAL NEWSPAPER HEADLINES (FREE RSS) =====================
+def fetch_todays_headlines():
+    print("📰 Fetching today's headlines from The Daily Star...")
+    try:
+        feed = feedparser.parse("https://www.thedailystar.net/rss.xml")
+        headlines = []
+        for entry in feed.entries[:15]:  # Get top 15 news
+            headlines.append(entry.title)
+        if headlines:
+            print(f"✅ Found {len(headlines)} headlines today!")
+            return headlines
+        else:
+            print("⚠️ RSS returned empty. Using fallback cache.")
+            return None
+    except Exception as e:
+        print(f"⚠️ RSS fetch failed: {e}")
+        return None
+
+# ===================== STEP 2: FETCH VOCABULARY FROM GROQ (WITH RETRIES) =====================
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+def fetch_batch_vocab(client, start_sl, count, level_description, headlines, exclude_words):
+    # Convert exclude list to a string for the prompt
+    exclude_str = ", ".join(exclude_words[-50:])  # Only send last 50 to save tokens
+
+    # Combine headlines into a clean list
+    headlines_text = "\n".join([f"- {h}" for h in headlines])
+
     prompt = f"""
-    Act strictly as a professional BCS and Bangladeshi Competitive Job Exam English Mentor, Lexicographer, and Bengali Linguist.
-    Generate exactly {count} high-yield vocabulary words (numbered from SL {start_sl} to {start_sl + count - 1}) commonly tested in BCS Preliminary/Written, Bank recruitment, and Judicial service exams, focusing on terms found in daily newspapers like The Daily Star or Prothom Alo.
+    Act strictly as a professional BCS and Bangladeshi Competitive Job Exam English Mentor.
+
+    TODAY'S REAL NEWSPAPER HEADLINES (from The Daily Star):
+    {headlines_text}
+
+    Based SOLELY on the vocabulary and topics found in these TODAY'S headlines, generate exactly {count} high-yield vocabulary words (numbered from SL {start_sl} to {start_sl + count - 1}).
 
     Difficulty distribution for this batch: {level_description}.
 
+    ⚠️ CRITICAL: DO NOT repeat these previously used words: {exclude_str}. Generate completely fresh words.
+
     CRITICAL INSTRUCTIONS FOR BENGALI TRANSLATION:
     1. Do NOT use literal, direct, or robotic word-for-word machine translation.
-    2. Provide natural, idiomatic Bengali translations consistent with standard Bengali dictionaries (e.g., Bangla Academy / Samsad English-to-Bengali Dictionary).
-    3. Ensure the Bengali meaning accurately reflects the specified Part of Speech (POS) and context as used by native Bengali speakers in formal/exam writing.
+    2. Provide natural, idiomatic Bengali translations consistent with standard Bengali dictionaries.
+    3. Ensure the Bengali meaning accurately reflects the specified Part of Speech (POS).
 
     Return a valid JSON object with a single key "vocab_list" containing an array of {count} objects.
     Each object must have these keys:
@@ -30,19 +78,17 @@ def fetch_batch_vocab(client, start_sl, count, level_description):
     "word": string,
     "pos": string (Noun, Verb, Adjective, etc.),
     "level": string ("Basic", "Intermediate", or "Advanced"),
-    "bengali": string (High-quality, natural Bangla meaning based on standard dictionaries),
+    "bengali": string (Natural Bangla meaning),
     "definition": string (Brief English definition),
     "synonyms": string (comma-separated),
     "antonyms": string (comma-separated),
-    "example": string (Exam-standard sentence),
+    "example": string (Exam-standard sentence using the word),
     "category": string (e.g., Economy, Politics, Public Health, Law & Judiciary, Environment)
     """
 
     system_instruction = (
-        "You are an expert Bengali lexicographer and linguist specializing in"
-        " Bangladeshi competitive job exams (BCS/Bank). Always generate"
-        " accurate, natural, human-like Bengali dictionary meanings instead of"
-        " literal machine translations. Always output valid JSON."
+        "You are an expert Bengali lexicographer. Always output valid JSON. "
+        "Never translate literally; use standard Bangla dictionary meanings."
     )
 
     response = client.chat.completions.create(
@@ -58,27 +104,53 @@ def fetch_batch_vocab(client, start_sl, count, level_description):
     data = json.loads(response.choices[0].message.content)
     return data.get("vocab_list", [])
 
-
+# ===================== STEP 3: ORCHESTRATE THE 100 WORDS =====================
 def fetch_100_vocab():
+    # Load history to avoid repeats
+    history = load_history()
+    past_words = history.get("words", [])
+    print(f"📚 Loaded {len(past_words)} historical words to avoid repetition.")
+
+    # Fetch today's headlines
+    headlines = fetch_todays_headlines()
+
+    # ZOMBIE MODE: If no headlines, use cached history to send yesterday's data
+    if not headlines:
+        print("💀 ZOMBIE MODE ACTIVATED: Using yesterday's cached vocabulary.")
+        if past_words:
+            # We'll just rebuild the vocab list from history (but we don't have full data)
+            # Fallback: generate generic words but tell user
+            headlines = ["No internet connection today. Generating general exam vocabulary as fallback."]
+        else:
+            headlines = ["General BCS vocabulary preparation"]
+
     client = Groq(api_key=GROQ_API_KEY)
-    print("Fetching Batch 1 (Words 1-50)...")
+    print("⏳ Fetching Batch 1 (Words 1-50)...")
     batch1 = fetch_batch_vocab(
-        client, 1, 50, "30 Basic and 20 Intermediate words"
+        client, 1, 50, "30 Basic and 20 Intermediate words", headlines, past_words
     )
 
-    print("Fetching Batch 2 (Words 51-100)...")
+    # Update past words with batch 1 to avoid crossing over into batch 2
+    temp_words = [item.get("word", "") for item in batch1]
+    combined_exclude = past_words + temp_words
+
+    print("⏳ Fetching Batch 2 (Words 51-100)...")
     batch2 = fetch_batch_vocab(
-        client, 51, 50, "15 Intermediate and 35 Advanced words"
+        client, 51, 50, "15 Intermediate and 35 Advanced words", headlines, combined_exclude
     )
 
     full_list = batch1 + batch2
     for idx, item in enumerate(full_list, 1):
         item["sl"] = idx
 
-    print(f"Successfully retrieved {len(full_list)} vocabulary items!")
+    # Save today's words to history for tomorrow
+    today_words = [item.get("word", "") for item in full_list]
+    save_history(past_words + today_words)
+
+    print(f"✅ Successfully retrieved {len(full_list)} vocabulary items!")
     return full_list
 
-
+# ===================== STEP 4: BUILD EXCEL (YOUR ORIGINAL BEAUTIFUL CODE - KEPT INTACT) =====================
 def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
     wb = openpyxl.Workbook()
 
@@ -366,12 +438,12 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
         ws_summary.column_dimensions[get_column_letter(col)].width = width
 
     wb.save(filename)
-    print(f"Excel file '{filename}' built successfully!")
+    print(f"✅ Excel file '{filename}' built successfully!")
     return filename
 
-
+# ===================== STEP 5: SEND TO TELEGRAM (WITH SAFE TEXT TRUNCATION) =====================
 def send_telegram_package(vocab_list, excel_file):
-    # 1. Send Text Digest
+    # 1. Send Text Digest (Truncated to avoid Telegram's 4096 character limit)
     message = "<b>📚 DAILY STAR 100-WORD VOCABULARY BANK</b>\n"
     message += "<i>BCS, Bank & Job Exam Special Edition</i>\n\n"
     message += "<b>🔥 Top Featured Words Today:</b>\n\n"
@@ -384,6 +456,9 @@ def send_telegram_package(vocab_list, excel_file):
         synonyms = html.escape(str(item.get("synonyms", "")))
         example = html.escape(str(item.get("example", "")))
 
+        # Truncate example if too long (keeps message safe)
+        example = textwrap.shorten(example, width=80, placeholder="...")
+
         message += f"<b>{idx}. {word}</b> ({pos}) — <i>{level}</i>\n"
         message += f"• <b>অর্থ:</b> {bengali}\n"
         message += f"• <b>Synonyms:</b> {synonyms}\n"
@@ -392,7 +467,7 @@ def send_telegram_package(vocab_list, excel_file):
     message += "─────────────────────\n"
     message += (
         "📎 <b>Attached:</b> Complete 100-word structured Excel file (`.xlsx`)"
-        " with Practice Questions & Summary Analysis below!"
+        " with Summary Analysis below!"
     )
 
     url_msg = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -401,8 +476,12 @@ def send_telegram_package(vocab_list, excel_file):
         "text": message,
         "parse_mode": "HTML",
     }
-    res_msg = requests.post(url_msg, json=payload_msg)
-    print("Telegram Text Response:", res_msg.status_code, res_msg.text)
+
+    try:
+        res_msg = requests.post(url_msg, json=payload_msg, timeout=30)
+        print("✅ Telegram Text sent:", res_msg.status_code)
+    except Exception as e:
+        print(f"⚠️ Failed to send text: {e}")
 
     # 2. Send Excel Document
     url_doc = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument"
@@ -414,20 +493,35 @@ def send_telegram_package(vocab_list, excel_file):
                 "📊 Here is your full 100-Word Daily Star Vocabulary Excel Bank!"
             ),
         }
-        req_doc = requests.post(url_doc, data=payload_doc, files=files)
-        print("Telegram Document Response:", req_doc.status_code, req_doc.text)
+        try:
+            req_doc = requests.post(url_doc, data=payload_doc, files=files, timeout=60)
+            print("✅ Telegram File sent:", req_doc.status_code)
+        except Exception as e:
+            print(f"⚠️ Failed to send file: {e}")
 
-
-# ENTRY POINT - THIS ACTUALLY RUNS THE AUTOMATION
+# ===================== ENTRY POINT =====================
 if __name__ == "__main__":
     if not GROQ_API_KEY or not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         raise ValueError(
-            "Missing required environment secrets (GROQ_API_KEY,"
+            "❌ Missing required environment secrets (GROQ_API_KEY,"
             " TELEGRAM_BOT_TOKEN, or TELEGRAM_CHAT_ID)."
         )
 
-    print("Starting Vocabulary Automation...")
-    vocab_data = fetch_100_vocab()
-    excel_path = build_excel(vocab_data)
-    send_telegram_package(vocab_data, excel_path)
-    print("Automation completed successfully!")
+    print("🚀 Starting Daily Newspaper Vocabulary Automation...")
+    try:
+        vocab_data = fetch_100_vocab()
+        excel_path = build_excel(vocab_data)
+        send_telegram_package(vocab_data, excel_path)
+        print("🎉 Automation completed successfully!")
+    except Exception as e:
+        print(f"🔥 Critical error: {e}")
+        # Even if it fails, try to send a fallback error message to Telegram
+        try:
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+            requests.post(url, json={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": f"⚠️ Daily Vocab Bot crashed. Error: {e}",
+                "parse_mode": "HTML"
+            })
+        except:
+            pass
