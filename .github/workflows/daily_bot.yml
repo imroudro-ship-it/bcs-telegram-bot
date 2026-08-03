@@ -2,8 +2,9 @@ name: Daily BCS Vocabulary Telegram Bot
 
 on:
   schedule:
-    - cron: '0 1 * * *'
-  workflow_dispatch:
+    # Runs at 9:00 AM UTC = 3:00 PM Dhaka (UTC+6)
+    - cron: '0 9 * * *'
+  workflow_dispatch:  # allows manual trigger
 
 jobs:
   run-bot:
@@ -20,9 +21,10 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Run Telegram Bot Script
+      - name: Run Daily Job
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GITHUB_ACTIONS: true   # tells the script it's running in Actions
         run: python main.py
