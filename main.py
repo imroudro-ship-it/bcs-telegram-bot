@@ -5,6 +5,7 @@ import asyncio
 import json
 import os
 import random
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -15,6 +16,7 @@ import pytz
 import requests
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from flask import Flask, render_template_string
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from telegram import Update
@@ -374,7 +376,6 @@ def build_weekly_excel(unique_words, entries):
     ws = wb.active
     ws.title = "Weekly Vocabulary"
 
-    # Headers
     headers = ["SL", "Word", "POS", "Level", "Bengali", "Definition", "Synonyms", "Antonyms", "Example", "Category"]
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col)
@@ -398,7 +399,6 @@ def build_weekly_excel(unique_words, entries):
         for col, val in enumerate(row_data, 1):
             ws.cell(row=idx, column=col, value=safe_excel_value(val))
 
-    # Summary sheet
     ws2 = wb.create_sheet("Weekly Stats")
     ws2["A1"] = "Week Summary"
     ws2["A1"].font = Font(bold=True, size=14)
@@ -417,25 +417,21 @@ def generate_dashboard(db):
     if not entries:
         return
 
-    # Prepare data for charts
-    dates = [e["date"][:10] for e in entries[-30:]]  # last 30 days
+    dates = [e["date"][:10] for e in entries[-30:]]
     counts = [len(e.get("words", [])) for e in entries[-30:]]
 
-    # Level distribution (last 7 days)
     level_counts = {"Basic": 0, "Intermediate": 0, "Advanced": 0}
     for e in entries[-7:]:
         for w in e.get("words", []):
             lvl = w.get("level", "Basic")
             level_counts[lvl] = level_counts.get(lvl, 0) + 1
 
-    # Category counts (last 7 days)
     cat_counts = {}
     for e in entries[-7:]:
         for w in e.get("words", []):
             cat = w.get("category", "Uncategorized")
             cat_counts[cat] = cat_counts.get(cat, 0) + 1
 
-    # Build HTML using jinja2
     template = """<!DOCTYPE html>
 <html>
 <head>
@@ -538,7 +534,6 @@ async def run_daily_job(bot=None):
     build_excel(vocab, mcqs)
     save_history(past + [w["word"] for w in vocab])
 
-    # Save to database
     db = load_database()
     entry = {
         "date": datetime.now(TIMEZONE).isoformat(),
@@ -556,10 +551,8 @@ async def run_daily_job(bot=None):
     db["entries"].append(entry)
     save_database(db)
 
-    # Generate dashboard
     generate_dashboard(db)
 
-    # Weekly summary on Sundays
     if datetime.now(TIMEZONE).weekday() == 6:  # Sunday
         last_7 = db["entries"][-7:]
         all_words = []
@@ -571,11 +564,10 @@ async def run_daily_job(bot=None):
             if w["word"] not in seen:
                 seen.add(w["word"])
                 unique_words.append(w)
-        if unique_words:
+        if unique_words and bot:
             weekly_file = build_weekly_excel(unique_words, last_7)
-            if bot:
-                with open(weekly_file, "rb") as f:
-                    await bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=f, caption="📊 Weekly Vocabulary Review")
+            with open(weekly_file, "rb") as f:
+                await bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=f, caption="📊 Weekly Vocabulary Review")
 
     if bot:
         chat_id = TELEGRAM_CHAT_ID
@@ -667,40 +659,50 @@ async def last_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def scheduled_job(context: ContextTypes.DEFAULT_TYPE):
     await run_daily_job(bot=context.bot)
 
-# ===================== MAIN =====================
-def main():
+# ===================== FLASK WEB SERVER (keep-alive) =====================
+app = Flask(__name__)
+
+@app.route("/")
+def health():
+    return "Bot is running!", 200
+
+@app.route("/dashboard")
+def dashboard():
+    if DASHBOARD_FILE.exists():
+        with open(DASHBOARD_FILE, "r", encoding="utf-8") as f:
+            return f.read()
+    return "Dashboard not yet generated.", 404
+
+def run_bot():
+    """Run the Telegram bot in a separate thread."""
     if not GROQ_API_KEY or not TELEGRAM_BOT_TOKEN:
         raise ValueError("Missing GROQ_API_KEY or TELEGRAM_BOT_TOKEN")
 
-    if os.environ.get("GITHUB_ACTIONS") == "true":
-        from telegram import Bot
-        bot = Bot(token=TELEGRAM_BOT_TOKEN)
-        try:
-            asyncio.run(run_daily_job(bot=bot))
-            print("GitHub Actions job completed.")
-        except Exception as e:
-            error_msg = f"❌ Daily job failed after 3 attempts: {str(e)[:200]}"
-            bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=error_msg)
-            print(error_msg)
-        return
-
-    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("daily", daily))
-    app.add_handler(CommandHandler("summary", summary_cmd))
-    app.add_handler(CommandHandler("quiz", quiz_cmd))
-    app.add_handler(CommandHandler("last", last_cmd))
+    # Run the interactive bot (this blocks)
+    app_telegram = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    app_telegram.add_handler(CommandHandler("start", start))
+    app_telegram.add_handler(CommandHandler("daily", daily))
+    app_telegram.add_handler(CommandHandler("summary", summary_cmd))
+    app_telegram.add_handler(CommandHandler("quiz", quiz_cmd))
+    app_telegram.add_handler(CommandHandler("last", last_cmd))
 
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
     scheduler.add_job(
         scheduled_job,
         trigger=CronTrigger(hour=15, minute=0, timezone=TIMEZONE),
-        args=[app.context]
+        args=[app_telegram.context]
     )
     scheduler.start()
 
-    print("🤖 Bot running. Commands: /start, /daily, /summary, /quiz, /last")
-    app.run_polling()
+    print("🤖 Bot is running and listening for commands...")
+    app_telegram.run_polling()
 
+# ===================== MAIN =====================
 if __name__ == "__main__":
-    main()
+    # Start the bot in a background thread
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+
+    # Start Flask web server (for health checks and dashboard)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
