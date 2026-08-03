@@ -2,9 +2,11 @@ name: Daily BCS Vocabulary Telegram Bot
 
 on:
   schedule:
-    # Runs at 9:00 AM UTC = 3:00 PM Dhaka (UTC+6)
-    - cron: '0 9 * * *'
-  workflow_dispatch:  # allows manual trigger
+    - cron: '0 9 * * *'   # 3 PM Dhaka
+  workflow_dispatch:
+
+permissions:
+  contents: write   # ⬅️ this is NEW – allows the bot to save history
 
 jobs:
   run-bot:
@@ -26,5 +28,13 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GITHUB_ACTIONS: true   # tells the script it's running in Actions
+          GITHUB_ACTIONS: true
         run: python main.py
+
+      - name: Commit and push changes (database + dashboard)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/ || echo "No data folder"
+          git commit -m "Update database and dashboard [skip ci]" || echo "No changes to commit"
+          git push
