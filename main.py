@@ -3,20 +3,38 @@ import json
 import requests
 from google import genai
 
-# Pull secrets securely from GitHub Actions environment
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
+def get_best_model(client):
+    """Finds an active content generation model associated with the key."""
+    try:
+        models = client.models.list()
+        for m in models:
+            # Look for active flash or standard gemini models
+            if "generateContent" in getattr(m, "supported_generation_methods", []) or hasattr(m, "name"):
+                name = m.name.replace("models/", "")
+                if "flash" in name or "gemini" in name:
+                    print(f"Selected active model: {name}")
+                    return name
+    except Exception as e:
+        print(f"Model auto-detection skipped: {e}")
+    
+    # Fallback to standard alias
+    return "gemini-2.0-flash"
+
 def generate_vocab():
-    # Initialize updated Google GenAI client
     client = genai.Client(api_key=GEMINI_API_KEY)
     
+    # Auto-detect available active model name
+    model_name = get_best_model(client)
+
     prompt = """
     Act strictly as a professional BCS and Bangladeshi Competitive Job Exam English Mentor.
     Generate 8 high-yield vocabulary words commonly tested in BCS Preliminary/Written, Bank recruitment, and Judicial service exams, focusing on terms found in daily newspapers like The Daily Star or Prothom Alo.
 
-    Return ONLY a raw JSON array of 8 objects (no markdown code blocks, no extra text). Each object must have:
+    Return ONLY a raw JSON array of 8 objects (no markdown blocks, no extra text). Each object must have:
     "word": string,
     "pos": string (Noun, Verb, Adjective),
     "level": string (Basic, Intermediate, Advanced),
@@ -26,9 +44,8 @@ def generate_vocab():
     "example": string (Exam-standard sentence)
     """
 
-    # Using universally accessible gemini-1.5-flash model
     response = client.models.generate_content(
-        model='gemini-1.5-flash',
+        model=model_name,
         contents=prompt,
     )
     
