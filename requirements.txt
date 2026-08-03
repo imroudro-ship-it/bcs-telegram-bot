@@ -1,3 +1,5 @@
 groq
-requests
 openpyxl
+requests
+feedparser
+tenacity
