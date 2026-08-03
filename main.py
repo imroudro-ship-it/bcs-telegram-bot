@@ -5,7 +5,7 @@ import asyncio
 import json
 import os
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import feedparser
@@ -20,6 +20,7 @@ from openpyxl.utils import get_column_letter
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from tenacity import retry, stop_after_attempt, wait_exponential
+import jinja2
 
 # ===================== ENVIRONMENT VARIABLES =====================
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
@@ -31,6 +32,8 @@ DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 SUMMARY_FILE = DATA_DIR / "summary.txt"
 EXCEL_FILE = DATA_DIR / "Vocabulary_Bank.xlsx"
+DATABASE_FILE = DATA_DIR / "database.json"
+DASHBOARD_FILE = DATA_DIR / "dashboard.html"
 
 # ===================== CONFIG =====================
 TIMEZONE = pytz.timezone("Asia/Dhaka")
@@ -51,6 +54,17 @@ def safe_excel_value(value):
         return str(value)
     return str(value)
 
+# ===================== DATABASE =====================
+def load_database():
+    if DATABASE_FILE.exists():
+        with open(DATABASE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"entries": []}
+
+def save_database(db):
+    with open(DATABASE_FILE, "w", encoding="utf-8") as f:
+        json.dump(db, f, indent=2, ensure_ascii=False)
+
 # ===================== HISTORY =====================
 def load_history():
     if os.path.exists(HISTORY_FILE):
@@ -62,11 +76,8 @@ def save_history(words):
     with open(HISTORY_FILE, "w") as f:
         json.dump({"words": words}, f)
 
-# ===================== FETCH HEADLINES WITH SOURCES =====================
+# ===================== FETCH HEADLINES =====================
 def fetch_headlines():
-    """
-    Returns a list of dicts: [{"headline": str, "source": str}, ...]
-    """
     all_entries = []
     for source, url in RSS_FEEDS.items():
         try:
@@ -76,17 +87,15 @@ def fetch_headlines():
                     "headline": entry.title,
                     "source": source
                 })
-        except Exception as e:
-            print(f"⚠️ Failed to fetch {source}: {e}")
-
-    # Remove duplicates (keep first occurrence)
+        except:
+            pass
     seen = set()
-    unique_entries = []
+    unique = []
     for entry in all_entries:
         if entry["headline"] not in seen:
             seen.add(entry["headline"])
-            unique_entries.append(entry)
-    return unique_entries[:25]
+            unique.append(entry)
+    return unique[:25]
 
 # ===================== GENERATE VOCAB + SUMMARY =====================
 def setup_groq():
@@ -94,7 +103,6 @@ def setup_groq():
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def generate_vocab_and_summary(client, headlines_data, past_words):
-    # headlines_data is list of dicts with "headline" and "source"
     headlines_text = "\n".join([f"- [{entry['source']}] {entry['headline']}" for entry in headlines_data])
     exclude = ", ".join(past_words[-50:])
 
@@ -137,7 +145,6 @@ Return JSON with keys: "vocab_list" (array) and "bengali_summary" (string).
     vocab = data.get("vocab_list", [])
     summary = data.get("bengali_summary", "")
 
-    # Fallback mapping for alternative keys
     for item in vocab:
         if "bengali" not in item and "bengali_meaning" in item:
             item["bengali"] = item["bengali_meaning"]
@@ -147,17 +154,12 @@ Return JSON with keys: "vocab_list" (array) and "bengali_summary" (string).
             if key not in item:
                 item[key] = ""
 
-    # If summary is empty, build a fallback
     if not summary or len(summary.strip()) < 10:
         summary = build_fallback_summary(headlines_data)
 
     return vocab, summary
 
 def build_fallback_summary(headlines_data):
-    """
-    Create a simple Bengali summary with newspaper names and top headlines.
-    """
-    # Group headlines by source
     sources = {}
     for entry in headlines_data:
         src = entry["source"]
@@ -168,10 +170,9 @@ def build_fallback_summary(headlines_data):
     summary = "📰 **আজকের প্রধান সংবাদ (সূত্র সহ)**\n\n"
     for src, headlines in sources.items():
         summary += f"▪️ **{src}**\n"
-        for h in headlines[:3]:  # top 3 per source
+        for h in headlines[:3]:
             summary += f"   - {h}\n"
         summary += "\n"
-
     summary += "🔹 অন্যান্য সংবাদপত্র থেকেও গুরুত্বপূর্ণ শব্দ সংগ্রহ করা হয়েছে।"
     return summary
 
@@ -226,8 +227,6 @@ Each object must have keys: question, options, answer, explanation.
         for q in mcqs:
             if isinstance(q, dict) and all(k in q for k in ("question", "options", "answer", "explanation")):
                 validated.append(q)
-        if len(validated) < 10:
-            validated = []
         return validated
     except Exception as e:
         print(f"⚠️ MCQs parsing error: {e}")
@@ -369,7 +368,161 @@ def build_excel(vocab_list, mcqs):
     wb.save(EXCEL_FILE)
     return EXCEL_FILE
 
+# ===================== BUILD WEEKLY EXCEL =====================
+def build_weekly_excel(unique_words, entries):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Weekly Vocabulary"
+
+    # Headers
+    headers = ["SL", "Word", "POS", "Level", "Bengali", "Definition", "Synonyms", "Antonyms", "Example", "Category"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col)
+        cell.value = h
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+
+    for idx, item in enumerate(unique_words, 2):
+        row_data = [
+            idx-1,
+            item.get("word", ""),
+            item.get("pos", ""),
+            item.get("level", ""),
+            item.get("bengali", ""),
+            item.get("definition", ""),
+            item.get("synonyms", ""),
+            item.get("antonyms", ""),
+            item.get("example", ""),
+            item.get("category", "")
+        ]
+        for col, val in enumerate(row_data, 1):
+            ws.cell(row=idx, column=col, value=safe_excel_value(val))
+
+    # Summary sheet
+    ws2 = wb.create_sheet("Weekly Stats")
+    ws2["A1"] = "Week Summary"
+    ws2["A1"].font = Font(bold=True, size=14)
+    ws2["A3"] = "Date Range:"
+    ws2["B3"] = f"{entries[0]['date'][:10]} to {entries[-1]['date'][:10]}"
+    ws2["A4"] = "Total Unique Words:"
+    ws2["B4"] = len(unique_words)
+
+    weekly_file = DATA_DIR / f"weekly_report_{datetime.now(TIMEZONE).strftime('%Y-%m-%d')}.xlsx"
+    wb.save(weekly_file)
+    return weekly_file
+
+# ===================== GENERATE DASHBOARD =====================
+def generate_dashboard(db):
+    entries = db.get("entries", [])
+    if not entries:
+        return
+
+    # Prepare data for charts
+    dates = [e["date"][:10] for e in entries[-30:]]  # last 30 days
+    counts = [len(e.get("words", [])) for e in entries[-30:]]
+
+    # Level distribution (last 7 days)
+    level_counts = {"Basic": 0, "Intermediate": 0, "Advanced": 0}
+    for e in entries[-7:]:
+        for w in e.get("words", []):
+            lvl = w.get("level", "Basic")
+            level_counts[lvl] = level_counts.get(lvl, 0) + 1
+
+    # Category counts (last 7 days)
+    cat_counts = {}
+    for e in entries[-7:]:
+        for w in e.get("words", []):
+            cat = w.get("category", "Uncategorized")
+            cat_counts[cat] = cat_counts.get(cat, 0) + 1
+
+    # Build HTML using jinja2
+    template = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Vocabulary Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 20px; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #1F4E78; }
+        .chart-row { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px; }
+        .chart-box { flex: 1; min-width: 300px; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+        canvas { max-height: 250px; width: 100% !important; }
+        .stats { display: flex; gap: 30px; flex-wrap: wrap; margin-bottom: 20px; }
+        .stat-card { background: #1F4E78; color: white; padding: 15px 25px; border-radius: 8px; }
+        .stat-card span { font-size: 28px; font-weight: bold; display: block; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📊 Vocabulary Progress Dashboard</h1>
+    <div class="stats">
+        <div class="stat-card">Total Words Learned <span>{{ total_words }}</span></div>
+        <div class="stat-card">Days Active <span>{{ days_active }}</span></div>
+        <div class="stat-card">Words This Week <span>{{ week_words }}</span></div>
+    </div>
+    <div class="chart-row">
+        <div class="chart-box"><h3>Daily Words (last 30 days)</h3><canvas id="dailyChart"></canvas></div>
+        <div class="chart-box"><h3>Level Distribution (last 7 days)</h3><canvas id="levelChart"></canvas></div>
+    </div>
+    <div class="chart-row">
+        <div class="chart-box"><h3>Top Categories (last 7 days)</h3><canvas id="categoryChart"></canvas></div>
+    </div>
+</div>
+<script>
+    const dailyData = {{ daily_data|tojson }};
+    const levelData = {{ level_data|tojson }};
+    const categoryData = {{ category_data|tojson }};
+
+    new Chart(document.getElementById('dailyChart'), {
+        type: 'bar',
+        data: {
+            labels: dailyData.labels,
+            datasets: [{ label: 'Words per day', data: dailyData.values, backgroundColor: '#1F4E78' }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+
+    new Chart(document.getElementById('levelChart'), {
+        type: 'pie',
+        data: {
+            labels: levelData.labels,
+            datasets: [{ data: levelData.values, backgroundColor: ['#2E7D32', '#F57F17', '#C62828'] }]
+        }
+    });
+
+    new Chart(document.getElementById('categoryChart'), {
+        type: 'bar',
+        data: {
+            labels: categoryData.labels,
+            datasets: [{ label: 'Words', data: categoryData.values, backgroundColor: '#2F5597' }]
+        }
+    });
+</script>
+</body>
+</html>
+"""
+
+    total_words = len(set(w["word"] for e in entries for w in e.get("words", [])))
+    days_active = len(entries)
+    week_words = sum(len(e.get("words", [])) for e in entries[-7:])
+
+    env = jinja2.Environment()
+    html = env.from_string(template).render(
+        total_words=total_words,
+        days_active=days_active,
+        week_words=week_words,
+        daily_data={"labels": dates, "values": counts},
+        level_data={"labels": list(level_counts.keys()), "values": list(level_counts.values())},
+        category_data={"labels": list(cat_counts.keys())[:10], "values": list(cat_counts.values())[:10]}
+    )
+
+    with open(DASHBOARD_FILE, "w", encoding="utf-8") as f:
+        f.write(html)
+
 # ===================== CORE JOB LOGIC =====================
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 async def run_daily_job(bot=None):
     client = setup_groq()
     headlines_data = fetch_headlines()
@@ -377,7 +530,6 @@ async def run_daily_job(bot=None):
         return "No headlines found."
 
     past = load_history()
-    # Extract just headlines for prompt (but we also pass full data for summary)
     vocab, summary = generate_vocab_and_summary(client, headlines_data, past)
     with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
         f.write(summary)
@@ -386,12 +538,50 @@ async def run_daily_job(bot=None):
     build_excel(vocab, mcqs)
     save_history(past + [w["word"] for w in vocab])
 
+    # Save to database
+    db = load_database()
+    entry = {
+        "date": datetime.now(TIMEZONE).isoformat(),
+        "word_count": len(vocab),
+        "levels": {"Basic": 0, "Intermediate": 0, "Advanced": 0},
+        "categories": {},
+        "words": vocab,
+        "summary": summary
+    }
+    for w in vocab:
+        lvl = w.get("level", "Basic")
+        entry["levels"][lvl] = entry["levels"].get(lvl, 0) + 1
+        cat = w.get("category", "Uncategorized")
+        entry["categories"][cat] = entry["categories"].get(cat, 0) + 1
+    db["entries"].append(entry)
+    save_database(db)
+
+    # Generate dashboard
+    generate_dashboard(db)
+
+    # Weekly summary on Sundays
+    if datetime.now(TIMEZONE).weekday() == 6:  # Sunday
+        last_7 = db["entries"][-7:]
+        all_words = []
+        for e in last_7:
+            all_words.extend(e.get("words", []))
+        seen = set()
+        unique_words = []
+        for w in all_words:
+            if w["word"] not in seen:
+                seen.add(w["word"])
+                unique_words.append(w)
+        if unique_words:
+            weekly_file = build_weekly_excel(unique_words, last_7)
+            if bot:
+                with open(weekly_file, "rb") as f:
+                    await bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=f, caption="📊 Weekly Vocabulary Review")
+
     if bot:
         chat_id = TELEGRAM_CHAT_ID
         if chat_id:
             with open(EXCEL_FILE, "rb") as f:
                 await bot.send_document(chat_id=chat_id, document=f, caption="📊 Daily Vocabulary Bank (auto-generated)")
-            # Send summary (now guaranteed to have content)
             await bot.send_message(chat_id=chat_id, text=f"📰 **Today's Summary**\n\n{summary}", parse_mode="Markdown")
         return "Sent successfully."
     else:
@@ -403,7 +593,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🤖 **Daily Vocabulary Bot**\n\n"
         "/daily - Get today's vocabulary + summary\n"
         "/summary - Get Bengali summary\n"
-        "/quiz - Get 10 MCQs\n\n"
+        "/quiz - Get 10 MCQs\n"
+        "/last 3 - Show last 3 days' words\n\n"
         "Auto-sends daily at 3 PM Asia/Dhaka.",
         parse_mode="Markdown"
     )
@@ -433,7 +624,6 @@ async def quiz_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ No headlines.")
             return
         past = load_history()
-        # Use generate_vocab_and_summary but we only need vocab (and it also returns summary)
         vocab, _ = generate_vocab_and_summary(client, headlines_data, past)
         mcqs = generate_mcqs(client, vocab)
         if not mcqs:
@@ -450,6 +640,29 @@ async def quiz_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Quiz error: {e}")
 
+async def last_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    n = 3
+    if args and args[0].isdigit():
+        n = min(int(args[0]), 7)
+    db = load_database()
+    entries = db["entries"][-n:]
+    if not entries:
+        await update.message.reply_text("No historical data yet. Use /daily first.")
+        return
+    reply = f"📜 **Last {len(entries)} days**\n\n"
+    for e in reversed(entries):
+        date = e["date"][:10]
+        words = e.get("words", [])
+        top5 = [w["word"] for w in words[:5]]
+        reply += f"**{date}** – {len(words)} words\n"
+        reply += f"   Top: {', '.join(top5)}\n"
+        if e.get("summary"):
+            summary_short = e["summary"][:100] + "..." if len(e["summary"]) > 100 else e["summary"]
+            reply += f"   📰 {summary_short}\n"
+        reply += "\n"
+    await update.message.reply_text(reply, parse_mode="Markdown")
+
 # ===================== SCHEDULED JOB =====================
 async def scheduled_job(context: ContextTypes.DEFAULT_TYPE):
     await run_daily_job(bot=context.bot)
@@ -462,8 +675,13 @@ def main():
     if os.environ.get("GITHUB_ACTIONS") == "true":
         from telegram import Bot
         bot = Bot(token=TELEGRAM_BOT_TOKEN)
-        asyncio.run(run_daily_job(bot=bot))
-        print("GitHub Actions job completed.")
+        try:
+            asyncio.run(run_daily_job(bot=bot))
+            print("GitHub Actions job completed.")
+        except Exception as e:
+            error_msg = f"❌ Daily job failed after 3 attempts: {str(e)[:200]}"
+            bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=error_msg)
+            print(error_msg)
         return
 
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
@@ -471,6 +689,7 @@ def main():
     app.add_handler(CommandHandler("daily", daily))
     app.add_handler(CommandHandler("summary", summary_cmd))
     app.add_handler(CommandHandler("quiz", quiz_cmd))
+    app.add_handler(CommandHandler("last", last_cmd))
 
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
     scheduler.add_job(
@@ -480,7 +699,7 @@ def main():
     )
     scheduler.start()
 
-    print("🤖 Bot running. Commands: /start, /daily, /summary, /quiz")
+    print("🤖 Bot running. Commands: /start, /daily, /summary, /quiz, /last")
     app.run_polling()
 
 if __name__ == "__main__":
