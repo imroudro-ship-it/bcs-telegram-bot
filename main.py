@@ -1,23 +1,22 @@
+import os
 import json
 import requests
-import google.generativeai as genai
+from google import genai
 
-# ==============================================================================
-# CONFIGURATION
-# ==============================================================================
-GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"       # From https://aistudio.google.com/
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN" # From @BotFather
-TELEGRAM_CHAT_ID = "YOUR_TELEGRAM_CHAT_ID"     # From @userinfobot
-
-# Initialize Gemini Client
-genai.configure(api_key=GEMINI_API_KEY)
+# Pull secrets securely
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def generate_vocab():
+    # Initialize updated Google GenAI client
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    
     prompt = """
     Act strictly as a professional BCS and Bangladeshi Competitive Job Exam English Mentor.
     Generate 8 high-yield vocabulary words commonly tested in BCS Preliminary/Written, Bank recruitment, and Judicial service exams, focusing on terms found in daily newspapers like The Daily Star or Prothom Alo.
 
-    Return ONLY a raw JSON array of 8 objects (no markdown blocks, no extra text). Each object must have:
+    Return ONLY a raw JSON array of 8 objects (no markdown code blocks, no extra text). Each object must have:
     "word": string,
     "pos": string (Noun, Verb, Adjective),
     "level": string (Basic, Intermediate, Advanced),
@@ -27,8 +26,10 @@ def generate_vocab():
     "example": string (Exam-standard sentence)
     """
 
-    model = genai.GenerativeModel('gemini-2.5-flash')
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt,
+    )
     
     clean_text = response.text.replace("```json", "").replace("```", "").strip()
     return json.loads(clean_text)
@@ -58,11 +59,12 @@ def send_telegram_message(vocab_list):
     if req.status_code == 200:
         print("Telegram message sent successfully!")
     else:
-        print(f"Failed to send message: {req.text}")
+        print(f"Telegram Error: {req.text}")
+        raise Exception(f"Telegram API Error: {req.text}")
 
 if __name__ == "__main__":
-    try:
-        vocab = generate_vocab()
-        send_telegram_message(vocab)
-    except Exception as e:
-        print(f"Error: {e}")
+    if not GEMINI_API_KEY or not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        raise ValueError("Missing required environment secrets.")
+    
+    vocab = generate_vocab()
+    send_telegram_message(vocab)
