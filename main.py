@@ -1,14 +1,16 @@
-import os
+import html
 import json
-import requests
+import os
 import openpyxl
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from openpyxl.utils import get_column_letter
 from groq import Groq
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
+import requests
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+
 
 def fetch_batch_vocab(client, start_sl, count, level_description):
     prompt = f"""
@@ -37,51 +39,54 @@ def fetch_batch_vocab(client, start_sl, count, level_description):
     """
 
     system_instruction = (
-        "You are an expert Bengali lexicographer and linguist specializing in Bangladeshi competitive job exams (BCS/Bank). "
-        "Always generate accurate, natural, human-like Bengali dictionary meanings instead of literal machine translations. "
-        "Always output valid JSON."
+        "You are an expert Bengali lexicographer and linguist specializing in"
+        " Bangladeshi competitive job exams (BCS/Bank). Always generate"
+        " accurate, natural, human-like Bengali dictionary meanings instead of"
+        " literal machine translations. Always output valid JSON."
     )
 
     response = client.chat.completions.create(
         messages=[
             {"role": "system", "content": system_instruction},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt},
         ],
         model="llama-3.3-70b-versatile",
-        temperature=0.3,  # Lower temperature slightly for more accurate dictionary definitions
-        response_format={"type": "json_object"}
+        temperature=0.3,
+        response_format={"type": "json_object"},
     )
-    
+
     data = json.loads(response.choices[0].message.content)
     return data.get("vocab_list", [])
+
 
 def fetch_100_vocab():
     client = Groq(api_key=GROQ_API_KEY)
     print("Fetching Batch 1 (Words 1-50)...")
-    batch1 = fetch_batch_vocab(client, 1, 50, "30 Basic and 20 Intermediate words")
-    
+    batch1 = fetch_batch_vocab(
+        client, 1, 50, "30 Basic and 20 Intermediate words"
+    )
+
     print("Fetching Batch 2 (Words 51-100)...")
-    batch2 = fetch_batch_vocab(client, 51, 50, "15 Intermediate and 35 Advanced words")
-    
+    batch2 = fetch_batch_vocab(
+        client, 51, 50, "15 Intermediate and 35 Advanced words"
+    )
+
     full_list = batch1 + batch2
-    # Ensure serial numbers are 1 to 100
     for idx, item in enumerate(full_list, 1):
         item["sl"] = idx
-        
+
     print(f"Successfully retrieved {len(full_list)} vocabulary items!")
     return full_list
+
 
 def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
     wb = openpyxl.Workbook()
 
-    # -------------------------------------------------------------------------
     # SHEET 1: Daily Star Vocabulary
-    # -------------------------------------------------------------------------
     ws_vocab = wb.active
     ws_vocab.title = "Daily Star Vocabulary"
     ws_vocab.sheet_view.showGridLines = True
 
-    # Styling Constants
     fill_navy = PatternFill(
         start_color="1F4E78", end_color="1F4E78", fill_type="solid"
     )
@@ -102,7 +107,6 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
         bottom=Side(style="thin", color="D9D9D9"),
     )
 
-    # Difficulty Badge Styles (Fill & Font)
     diff_styles = {
         "Basic": {
             "fill": PatternFill(
@@ -173,7 +177,7 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
             horizontal="center", vertical="center", wrap_text=True
         )
 
-    # Populate Vocabulary Data
+    # Populate Data
     for row_idx, item in enumerate(vocab_list, 5):
         ws_vocab.row_dimensions[row_idx].height = 26
         row_vals = [
@@ -196,19 +200,19 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
             cell.border = thin_border
             cell.fill = fill_even if row_idx % 2 == 0 else fill_odd
 
-            # Alignments
             if col_idx in [1, 3]:
                 cell.alignment = Alignment(
                     horizontal="center", vertical="center"
                 )
             elif col_idx in [2, 10]:
-                cell.alignment = Alignment(horizontal="left", vertical="center")
+                cell.alignment = Alignment(
+                    horizontal="left", vertical="center"
+                )
             else:
                 cell.alignment = Alignment(
                     horizontal="left", vertical="center", wrap_text=True
                 )
 
-            # Apply Difficulty Color Badge (Column 4)
             if col_idx == 4:
                 level_str = str(val).strip().capitalize()
                 if level_str in diff_styles:
@@ -218,7 +222,6 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
                     horizontal="center", vertical="center"
                 )
 
-    # Column Widths for Sheet 1
     col_widths_vocab = {
         1: 8,
         2: 18,
@@ -234,9 +237,7 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
     for col, width in col_widths_vocab.items():
         ws_vocab.column_dimensions[get_column_letter(col)].width = width
 
-    # -------------------------------------------------------------------------
-    # SHEET 2: Summary & Sector Mapping
-    # -------------------------------------------------------------------------
+    # SHEET 2: Summary
     ws_summary = wb.create_sheet(title="BCS & Job Prep Summary")
     ws_summary.sheet_view.showGridLines = True
 
@@ -250,7 +251,6 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
         horizontal="center", vertical="center"
     )
 
-    # Table 1: Breakdown By Level (Dynamic COUNTIF Formulas)
     ws_summary.merge_cells("A3:C3")
     ws_summary["A3"] = "VOCABULARY BREAKDOWN BY LEVEL"
     ws_summary["A3"].font = Font(
@@ -273,9 +273,27 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
 
     last_data_row = len(vocab_list) + 4
     sum_data_1 = [
-        ("Basic", f"=COUNTIF('Daily Star Vocabulary'!D5:D{last_data_row}, \"Basic\")", "=B5/$B$8"),
-        ("Intermediate", f"=COUNTIF('Daily Star Vocabulary'!D5:D{last_data_row}, \"Intermediate\")", "=B6/$B$8"),
-        ("Advanced", f"=COUNTIF('Daily Star Vocabulary'!D5:D{last_data_row}, \"Advanced\")", "=B7/$B$8"),
+        (
+            "Basic",
+            f"=COUNTIF('Daily Star Vocabulary'!D5:D{last_data_row}, \"Basic\")",
+            "=B5/$B$8",
+        ),
+        (
+            "Intermediate",
+            (
+                "=COUNTIF('Daily Star Vocabulary'!D5:D"
+                f'{last_data_row}, "Intermediate")'
+            ),
+            "=B6/$B$8",
+        ),
+        (
+            "Advanced",
+            (
+                '=COUNTIF(\'Daily Star Vocabulary\'!D5:D'
+                f'{last_data_row}, "Advanced")'
+            ),
+            "=B7/$B$8",
+        ),
         ("Total Vocabulary", "=SUM(B5:B7)", "=SUM(C5:C7)"),
     ]
 
@@ -291,7 +309,6 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
                 horizontal="center" if c_idx > 1 else "left", vertical="center"
             )
 
-    # Table 2: Newspaper Sector to Exam Mapping
     ws_summary.merge_cells("E3:G3")
     ws_summary["E3"] = "SECTOR DISTRIBUTION & JOB EXAM RELEVANCE"
     ws_summary["E3"].font = Font(
@@ -324,18 +341,18 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
     ]
 
     for idx, (sec_name, exam_target) in enumerate(sectors, 5):
-        ws_summary.cell(row=idx, column=5, value=sec_name).alignment = Alignment(
-            horizontal="left", vertical="center"
-        )
-        
-        # COUNTIF for sector mapping
+        ws_summary.cell(
+            row=idx, column=5, value=sec_name
+        ).alignment = Alignment(horizontal="left", vertical="center")
         cell_cnt = ws_summary.cell(
             row=idx,
             column=6,
-            value=f'=COUNTIF(\'Daily Star Vocabulary\'!J5:J{last_data_row}, "*{sec_name.split()[0]}*")',
+            value=(
+                "=COUNTIF('Daily Star Vocabulary'!J5:J"
+                f'{last_data_row}, "*{sec_name.split()[0]}*")'
+            ),
         )
         cell_cnt.alignment = Alignment(horizontal="center", vertical="center")
-
         cell_target = ws_summary.cell(row=idx, column=7, value=exam_target)
         cell_target.alignment = Alignment(horizontal="left", vertical="center")
 
@@ -344,29 +361,22 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
             cell.font = Font(name="Calibri", size=10)
             cell.border = thin_border
 
-    # Set Column Widths for Sheet 2
     col_widths_summary = {1: 22, 2: 14, 3: 14, 4: 4, 5: 25, 6: 14, 7: 45}
     for col, width in col_widths_summary.items():
         ws_summary.column_dimensions[get_column_letter(col)].width = width
 
-    # Save workbook
     wb.save(filename)
     print(f"Excel file '{filename}' built successfully!")
     return filename
-    import html
-
-
-import html
 
 
 def send_telegram_package(vocab_list, excel_file):
-    # 1. Send Text Digest safely
+    # 1. Send Text Digest
     message = "<b>📚 DAILY STAR 100-WORD VOCABULARY BANK</b>\n"
     message += "<i>BCS, Bank & Job Exam Special Edition</i>\n\n"
     message += "<b>🔥 Top Featured Words Today:</b>\n\n"
 
     for idx, item in enumerate(vocab_list[:8], 1):
-        # Escape HTML special characters in AI-generated text
         word = html.escape(str(item.get("word", "")))
         pos = html.escape(str(item.get("pos", "")))
         level = html.escape(str(item.get("level", "")))
@@ -406,3 +416,18 @@ def send_telegram_package(vocab_list, excel_file):
         }
         req_doc = requests.post(url_doc, data=payload_doc, files=files)
         print("Telegram Document Response:", req_doc.status_code, req_doc.text)
+
+
+# ENTRY POINT - THIS ACTUALLY RUNS THE AUTOMATION
+if __name__ == "__main__":
+    if not GROQ_API_KEY or not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        raise ValueError(
+            "Missing required environment secrets (GROQ_API_KEY,"
+            " TELEGRAM_BOT_TOKEN, or TELEGRAM_CHAT_ID)."
+        )
+
+    print("Starting Vocabulary Automation...")
+    vocab_data = fetch_100_vocab()
+    excel_path = build_excel(vocab_data)
+    send_telegram_package(vocab_data, excel_path)
+    print("Automation completed successfully!")
