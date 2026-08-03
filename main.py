@@ -2,6 +2,7 @@ import os
 import json
 import requests
 from google import genai
+from google.genai import errors
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -24,11 +25,25 @@ def generate_vocab():
     "example": string (Exam-standard sentence)
     """
 
-    # Using gemini-2.5-flash-lite or gemini-1.5-flash which have active free quotas
-    response = client.models.generate_content(
-        model='gemini-2.5-flash-lite',
-        contents=prompt,
-    )
+    # Primary and fallback models for Google GenAI SDK
+    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
+    
+    response = None
+    for model_name in models_to_try:
+        try:
+            print(f"Attempting generation with model: {model_name}...")
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
+            print(f"Successfully generated response using {model_name}!")
+            break
+        except errors.APIError as e:
+            print(f"Warning: {model_name} failed with error: {e}")
+            continue
+
+    if not response or not response.text:
+        raise Exception("Failed to generate content using all available Gemini models.")
     
     clean_text = response.text.replace("```json", "").replace("```", "").strip()
     return json.loads(clean_text)
