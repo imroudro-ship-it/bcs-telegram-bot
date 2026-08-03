@@ -9,6 +9,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def generate_vocab():
+    # Initialize updated Google GenAI client
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     prompt = """
@@ -25,9 +26,9 @@ def generate_vocab():
     "example": string (Exam-standard sentence)
     """
 
-    # Using gemini-2.5-flash which active free-tier keys support
+    # Using universally accessible gemini-1.5-flash model
     response = client.models.generate_content(
-        model='gemini-2.5-flash',
+        model='gemini-1.5-flash',
         contents=prompt,
     )
     
