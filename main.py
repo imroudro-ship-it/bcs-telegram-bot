@@ -22,9 +22,9 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 # ===================== ENVIRONMENT VARIABLES =====================
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+GROQ_API_KEY = "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"          # paste your Groq key here
+TELEGRAM_BOT_TOKEN = "8928425869:AAGhj7KjppS5IvXjtXDOrDifFESaOyr16_8"       # paste your bot token
+TELEGRAM_CHAT_ID = "1641716950"              # paste your chat ID
 
 HISTORY_FILE = "history.json"
 DATA_DIR = Path("data")
