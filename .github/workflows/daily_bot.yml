@@ -1,0 +1,25 @@
+name: Daily BCS Vocabulary Telegram Bot
+
+on:
+  schedule:
+    # 7:00 AM Bangladesh Time (1:00 AM UTC)
+    - cron: '0 1 * * *'
+  workflow_dispatch: # Allows manual trigger testing
+
+jobs:
+  run-bot:
+    runs-rows: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Telegram Bot Script
+        run: python main.py
