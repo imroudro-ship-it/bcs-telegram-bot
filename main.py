@@ -353,4 +353,53 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
     wb.save(filename)
     print(f"Excel file '{filename}' built successfully!")
     return filename
-    send_telegram_package(vocab_data, excel_path)
+    import html
+
+
+def send_telegram_package(vocab_list, excel_file):
+    # 1. Send Text Digest safely
+    message = "<b>📚 DAILY STAR 100-WORD VOCABULARY BANK</b>\n"
+    message += "<i>BCS, Bank & Job Exam Special Edition</i>\n\n"
+    message += "<b>🔥 Top Featured Words Today:</b>\n\n"
+
+    for idx, item in enumerate(vocab_list[:8], 1):
+        # Escape HTML special characters in AI-generated text
+        word = html.escape(str(item.get("word", "")))
+        pos = html.escape(str(item.get("pos", "")))
+        level = html.escape(str(item.get("level", "")))
+        bengali = html.escape(str(item.get("bengali", "")))
+        synonyms = html.escape(str(item.get("synonyms", "")))
+        example = html.escape(str(item.get("example", "")))
+
+        message += f"<b>{idx}. {word}</b> ({pos}) — <i>{level}</i>\n"
+        message += f"• <b>অর্থ:</b> {bengali}\n"
+        message += f"• <b>Synonyms:</b> {synonyms}\n"
+        message += f'• <b>Example:</b> <i>"{example}"</i>\n\n'
+
+    message += "─────────────────────\n"
+    message += (
+        "📎 <b>Attached:</b> Complete 100-word structured Excel file (`.xlsx`)"
+        " with Practice Questions & Summary Analysis below!"
+    )
+
+    url_msg = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload_msg = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "HTML",
+    }
+    res_msg = requests.post(url_msg, json=payload_msg)
+    print("Telegram Text Response:", res_msg.status_code, res_msg.text)
+
+    # 2. Send Excel Document
+    url_doc = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument"
+    with open(excel_file, "rb") as file_data:
+        files = {"document": file_data}
+        payload_doc = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "caption": (
+                "📊 Here is your full 100-Word Daily Star Vocabulary Excel Bank!"
+            ),
+        }
+        req_doc = requests.post(url_doc, data=payload_doc, files=files)
+        print("Telegram Document Response:", req_doc.status_code, req_doc.text)
