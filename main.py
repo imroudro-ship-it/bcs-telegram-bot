@@ -3,13 +3,12 @@ import json
 import requests
 from google import genai
 
-# Pull secrets securely
+# Pull secrets securely from GitHub Actions environment
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def generate_vocab():
-    # Initialize updated Google GenAI client
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     prompt = """
@@ -26,8 +25,9 @@ def generate_vocab():
     "example": string (Exam-standard sentence)
     """
 
+    # Using gemini-2.5-flash which active free-tier keys support
     response = client.models.generate_content(
-        model='gemini-2.0-flash',
+        model='gemini-2.5-flash',
         contents=prompt,
     )
     
