@@ -3,20 +3,18 @@ import json
 import requests
 from google import genai
 
-# Pull secrets securely from GitHub Actions environment
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def generate_vocab():
-    # Initialize Google GenAI client
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     prompt = """
     Act strictly as a professional BCS and Bangladeshi Competitive Job Exam English Mentor.
     Generate 8 high-yield vocabulary words commonly tested in BCS Preliminary/Written, Bank recruitment, and Judicial service exams, focusing on terms found in daily newspapers like The Daily Star or Prothom Alo.
 
-    Return ONLY a raw JSON array of 8 objects (no markdown code blocks, no extra text). Each object must have:
+    Return ONLY a raw JSON array of 8 objects (no markdown blocks, no extra text). Each object must have:
     "word": string,
     "pos": string (Noun, Verb, Adjective),
     "level": string (Basic, Intermediate, Advanced),
@@ -26,9 +24,9 @@ def generate_vocab():
     "example": string (Exam-standard sentence)
     """
 
-    # Using gemini-2.0-flash (Fully supported for all API keys)
+    # Using gemini-2.5-flash-lite or gemini-1.5-flash which have active free quotas
     response = client.models.generate_content(
-        model='gemini-2.0-flash',
+        model='gemini-2.5-flash-lite',
         contents=prompt,
     )
     
