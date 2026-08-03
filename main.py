@@ -49,7 +49,7 @@ def safe_excel_value(value):
     if isinstance(value, list):
         return ", ".join(str(v) for v in value)
     if isinstance(value, dict):
-        # If it's a dict, maybe we want a string representation, but we shouldn't get this.
+        # If it's a dict, try to get a string representation, but this shouldn't happen.
         return str(value)
     return str(value)
 
@@ -123,25 +123,71 @@ Return JSON with keys: "vocab_list" (array) and "bengali_summary" (string).
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def generate_mcqs(client, vocab_list):
+    # Select 10 random words
     selected = random.sample(vocab_list, min(10, len(vocab_list)))
     word_list = [w["word"] for w in selected]
 
     prompt = f"""
-Generate 10 MCQs from these words: {', '.join(word_list)}.
-For each: question, options (A-D), answer (letter), explanation.
-Return JSON array.
+Generate 10 multiple-choice questions (MCQs) from these vocabulary words: {', '.join(word_list)}.
+For each question, provide:
+- "question": the question text
+- "options": a list of 4 options (A, B, C, D)
+- "answer": the correct option letter (A, B, C, or D)
+- "explanation": a brief explanation of why the answer is correct
+
+Return a JSON array of objects. The array must contain exactly 10 objects.
+Each object must have keys: question, options, answer, explanation.
+
+Example format:
+[
+  {{"question": "What does 'X' mean?", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "A", "explanation": "..."}},
+  ...
+]
 """
 
     response = client.chat.completions.create(
         messages=[
-            {"role": "system", "content": "You are an exam creator. Output valid JSON."},
+            {"role": "system", "content": "You are an exam creator. Always output valid JSON."},
             {"role": "user", "content": prompt}
         ],
         model="llama-3.3-70b-versatile",
         temperature=0.4,
         response_format={"type": "json_object"},
     )
-    return json.loads(response.choices[0].message.content)
+
+    try:
+        raw = json.loads(response.choices[0].message.content)
+        # If the response is a dict with a key like "mcqs", extract it
+        if isinstance(raw, dict):
+            if "mcqs" in raw:
+                mcqs = raw["mcqs"]
+            elif "questions" in raw:
+                mcqs = raw["questions"]
+            else:
+                # Maybe it's the array itself but wrapped? Try to find first array value
+                for v in raw.values():
+                    if isinstance(v, list):
+                        mcqs = v
+                        break
+                else:
+                    mcqs = []
+        elif isinstance(raw, list):
+            mcqs = raw
+        else:
+            mcqs = []
+
+        # Validate each item is a dict with required keys
+        validated = []
+        for q in mcqs:
+            if isinstance(q, dict) and all(k in q for k in ("question", "options", "answer", "explanation")):
+                validated.append(q)
+        if len(validated) < 10:
+            # If not enough valid items, we'll fall back to dummy MCQs
+            validated = []
+        return validated
+    except Exception as e:
+        print(f"⚠️ MCQs parsing error: {e}")
+        return []
 
 # ===================== BUILD EXCEL =====================
 def build_excel(vocab_list, mcqs):
@@ -249,37 +295,46 @@ def build_excel(vocab_list, mcqs):
     ws2["B7"] = "=SUM(B4:B6)"
     ws2["C7"] = "=SUM(C4:C6)"
 
-    # Sheet 3: Practice Test
-    ws3 = wb.create_sheet("Practice Test")
-    ws3.merge_cells("A1:F1")
-    ws3["A1"] = "10 MCQs - Test Yourself"
-    ws3["A1"].font = Font(size=14, bold=True)
-    ws3["A1"].alignment = Alignment(horizontal="center")
+    # Sheet 3: Practice Test (only if we have valid MCQs)
+    if mcqs and isinstance(mcqs, list) and all(isinstance(q, dict) for q in mcqs):
+        ws3 = wb.create_sheet("Practice Test")
+        ws3.merge_cells("A1:F1")
+        ws3["A1"] = "10 MCQs - Test Yourself"
+        ws3["A1"].font = Font(size=14, bold=True)
+        ws3["A1"].alignment = Alignment(horizontal="center")
 
-    mcq_headers = ["#", "Question", "A", "B", "C", "D", "Answer", "Explanation"]
-    for col, h in enumerate(mcq_headers, 1):
-        cell = ws3.cell(row=3, column=col)
-        cell.value = h
-        cell.font = Font(bold=True)
-        cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+        mcq_headers = ["#", "Question", "A", "B", "C", "D", "Answer", "Explanation"]
+        for col, h in enumerate(mcq_headers, 1):
+            cell = ws3.cell(row=3, column=col)
+            cell.value = h
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
 
-    for i, q in enumerate(mcqs, 4):
-        ws3.cell(row=i, column=1, value=i-3)
-        ws3.cell(row=i, column=2, value=safe_excel_value(q.get("question", ""))).alignment = Alignment(wrap_text=True)
-        opts = q.get("options", [])
-        for j, opt in enumerate(opts, 3):
-            ws3.cell(row=i, column=j, value=safe_excel_value(opt))
-        ws3.cell(row=i, column=7, value=safe_excel_value(q.get("answer", ""))).alignment = Alignment(horizontal="center")
-        ws3.cell(row=i, column=8, value=safe_excel_value(q.get("explanation", ""))).alignment = Alignment(wrap_text=True)
+        for i, q in enumerate(mcqs[:10], 4):
+            ws3.cell(row=i, column=1, value=i-3)
+            ws3.cell(row=i, column=2, value=safe_excel_value(q.get("question", ""))).alignment = Alignment(wrap_text=True)
+            opts = q.get("options", [])
+            for j, opt in enumerate(opts, 3):
+                ws3.cell(row=i, column=j, value=safe_excel_value(opt))
+            ws3.cell(row=i, column=7, value=safe_excel_value(q.get("answer", ""))).alignment = Alignment(horizontal="center")
+            ws3.cell(row=i, column=8, value=safe_excel_value(q.get("explanation", ""))).alignment = Alignment(wrap_text=True)
 
-    for col in range(1, 9):
-        ws3.column_dimensions[get_column_letter(col)].width = 20 if col != 2 else 40
-    ws3.freeze_panes = "A4"
+        for col in range(1, 9):
+            ws3.column_dimensions[get_column_letter(col)].width = 20 if col != 2 else 40
+        ws3.freeze_panes = "A4"
+    else:
+        # Optionally create a placeholder sheet
+        ws3 = wb.create_sheet("Practice Test")
+        ws3.merge_cells("A1:F1")
+        ws3["A1"] = "Practice Test - Not Generated (API issue)"
+        ws3["A1"].font = Font(size=14, bold=True)
+        ws3["A1"].alignment = Alignment(horizontal="center")
+        ws3["A3"] = "No MCQs were generated due to a temporary issue. Try again tomorrow."
 
     wb.save(EXCEL_FILE)
     return EXCEL_FILE
 
-# ===================== CORE JOB LOGIC (used by both scheduled and interactive) =====================
+# ===================== CORE JOB LOGIC =====================
 async def run_daily_job(bot=None):
     """Generate vocabulary, summary, MCQs, build Excel, and send via bot (if provided)."""
     client = setup_groq()
@@ -291,11 +346,13 @@ async def run_daily_job(bot=None):
     vocab, summary = generate_vocab_and_summary(client, headlines, past)
     with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
         f.write(summary)
+
+    # Generate MCQs (may return empty list if fails)
     mcqs = generate_mcqs(client, vocab)
+
     build_excel(vocab, mcqs)
     save_history(past + [w["word"] for w in vocab])
 
-    # If bot is provided, send the files and summary
     if bot:
         chat_id = TELEGRAM_CHAT_ID
         if chat_id:
@@ -304,7 +361,6 @@ async def run_daily_job(bot=None):
             await bot.send_message(chat_id=chat_id, text=f"📰 **Summary**\n\n{summary}", parse_mode="Markdown")
         return "Sent successfully."
     else:
-        # Just save and return, useful for local testing
         return "Generated successfully."
 
 # ===================== TELEGRAM COMMANDS =====================
@@ -321,7 +377,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text("⏳ Generating...")
     try:
-        # Use the bot from context
         result = await run_daily_job(bot=context.bot)
         await update.message.reply_text("✅ " + result)
         await msg.delete()
@@ -346,6 +401,9 @@ async def quiz_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         past = load_history()
         vocab, _ = generate_vocab_and_summary(client, headlines, past)
         mcqs = generate_mcqs(client, vocab)
+        if not mcqs:
+            await update.message.reply_text("⚠️ Could not generate MCQs. Please try again later.")
+            return
         reply = "📝 **Practice Test**\n\n"
         for i, q in enumerate(mcqs, 1):
             reply += f"**{i}. {q['question']}**\n"
@@ -357,7 +415,7 @@ async def quiz_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Quiz error: {e}")
 
-# ===================== SCHEDULED JOB (called by APScheduler) =====================
+# ===================== SCHEDULED JOB =====================
 async def scheduled_job(context: ContextTypes.DEFAULT_TYPE):
     await run_daily_job(bot=context.bot)
 
@@ -368,10 +426,8 @@ def main():
 
     # If running in GitHub Actions, run the scheduled job once and exit
     if os.environ.get("GITHUB_ACTIONS") == "true":
-        # Create a bot instance to send messages
         from telegram import Bot
         bot = Bot(token=TELEGRAM_BOT_TOKEN)
-        # Run the job asynchronously
         asyncio.run(run_daily_job(bot=bot))
         print("GitHub Actions job completed.")
         return
