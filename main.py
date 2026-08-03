@@ -10,18 +10,16 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-def fetch_100_vocab():
-    client = Groq(api_key=GROQ_API_KEY)
-    
-    prompt = """
+def fetch_batch_vocab(client, start_sl, count, level_description):
+    prompt = f"""
     Act strictly as a professional BCS and Bangladeshi Competitive Job Exam English Mentor.
-    Generate 100 high-yield vocabulary words commonly tested in BCS Preliminary/Written, Bank recruitment, and Judicial service exams, focusing on terms found in daily newspapers like The Daily Star or Prothom Alo.
+    Generate exactly {count} high-yield vocabulary words (numbered from SL {start_sl} to {start_sl + count - 1}) commonly tested in BCS Preliminary/Written, Bank recruitment, and Judicial service exams, focusing on terms found in daily newspapers like The Daily Star or Prothom Alo.
 
-    Provide a mixture of Basic (30 words), Intermediate (35 words), and Advanced (35 words).
+    Difficulty distribution for this batch: {level_description}.
 
-    Return ONLY a raw JSON array of 100 objects with no markdown formatting or extra commentary.
-    Keys for each object:
-    "sl": integer (1 to 100),
+    Return a valid JSON object with a single key "vocab_list" containing an array of {count} objects.
+    Each object must have these keys:
+    "sl": integer,
     "word": string,
     "pos": string (Noun, Verb, Adjective, etc.),
     "level": string ("Basic", "Intermediate", or "Advanced"),
@@ -29,23 +27,38 @@ def fetch_100_vocab():
     "definition": string (Brief English definition),
     "synonyms": string (comma-separated),
     "antonyms": string (comma-separated),
-    "example": string (Exam-standard sentence from newspaper style),
+    "example": string (Exam-standard sentence),
     "category": string (e.g., Economy, Politics, Public Health, Law & Judiciary, Environment)
     """
 
     response = client.chat.completions.create(
         messages=[
-            {"role": "system", "content": "You are a JSON generator for Bangladeshi competitive job exams."},
+            {"role": "system", "content": "You are a JSON generator for Bangladeshi competitive job exams. Always output valid JSON."},
             {"role": "user", "content": prompt}
         ],
         model="llama-3.3-70b-versatile",
         temperature=0.4,
-        max_tokens=8000
+        response_format={"type": "json_object"}
     )
     
-    raw_text = response.choices[0].message.content
-    clean_text = raw_text.replace("```json", "").replace("```", "").strip()
-    return json.loads(clean_text)
+    data = json.loads(response.choices[0].message.content)
+    return data.get("vocab_list", [])
+
+def fetch_100_vocab():
+    client = Groq(api_key=GROQ_API_KEY)
+    print("Fetching Batch 1 (Words 1-50)...")
+    batch1 = fetch_batch_vocab(client, 1, 50, "30 Basic and 20 Intermediate words")
+    
+    print("Fetching Batch 2 (Words 51-100)...")
+    batch2 = fetch_batch_vocab(client, 51, 50, "15 Intermediate and 35 Advanced words")
+    
+    full_list = batch1 + batch2
+    # Ensure serial numbers are 1 to 100
+    for idx, item in enumerate(full_list, 1):
+        item["sl"] = idx
+        
+    print(f"Successfully retrieved {len(full_list)} vocabulary items!")
+    return full_list
 
 def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
     wb = openpyxl.Workbook()
@@ -54,7 +67,6 @@ def build_excel(vocab_list, filename="The_Daily_Star_Vocabulary_Bank.xlsx"):
     ws_vocab = wb.active
     ws_vocab.title = 'Daily Star Vocabulary'
     ws_summary = wb.create_sheet(title='BCS & Job Prep Summary')
-    ws_practice = wb.create_sheet(title='BCS & Bank Practice Set')
 
     # Styling constants
     fill_navy = PatternFill(start_color='1F4E78', end_color='1F4E78', fill_type='solid')
