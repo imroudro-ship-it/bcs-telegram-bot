@@ -5,8 +5,6 @@ import asyncio
 import json
 import os
 import random
-import csv
-import urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -18,7 +16,7 @@ import requests
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from telegram import Bot
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 # ========== ENV ==========
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
@@ -31,49 +29,18 @@ DATA_DIR.mkdir(exist_ok=True)
 EXCEL_FILE = DATA_DIR / "Vocabulary_Bank.xlsx"
 HISTORY_FILE = "history.json"
 
-# Dictionary file
-DICT_FILE = DATA_DIR / "bangla_dictionary.json"
-DICT_CSV_URL = "https://raw.githubusercontent.com/MinhasKamal/BengaliDictionary/master/data/english-bangla.csv"
-
-# --------------------------------------------------------------
-# DICTIONARY LOADER: download & convert if missing
-# --------------------------------------------------------------
-
-def load_or_download_dictionary():
-    if DICT_FILE.exists():
-        try:
-            with open(DICT_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            pass
-
-    print("📥 Dictionary not found. Downloading from GitHub (this may take a moment)...")
+# Load dictionary (now from local file)
+DICT_FILE = Path("bangla_dictionary.json")
+bengali_dict = {}
+if DICT_FILE.exists():
     try:
-        # Download CSV
-        with urllib.request.urlopen(DICT_CSV_URL) as response:
-            csv_data = response.read().decode('utf-8')
-        # Parse CSV: each row is [English, Bengali, ...] (first row header)
-        lines = csv_data.splitlines()
-        reader = csv.reader(lines)
-        header = next(reader)  # skip header
-        dict_data = {}
-        for row in reader:
-            if len(row) >= 2:
-                eng = row[0].strip()
-                ben = row[1].strip()
-                if eng and ben:
-                    dict_data[eng] = ben
-        # Save as JSON for future runs
-        with open(DICT_FILE, "w", encoding="utf-8") as f:
-            json.dump(dict_data, f, ensure_ascii=False, indent=2)
-        print(f"✅ Dictionary loaded: {len(dict_data)} entries.")
-        return dict_data
-    except Exception as e:
-        print(f"⚠️ Failed to download dictionary: {e}. Using AI only.")
-        return {}
-
-# Load dictionary
-bengali_dict = load_or_download_dictionary()
+        with open(DICT_FILE, "r", encoding="utf-8") as f:
+            bengali_dict = json.load(f)
+        print(f"✅ Loaded {len(bengali_dict)} dictionary entries.")
+    except:
+        print("⚠️ Failed to load dictionary. Using AI only.")
+else:
+    print("⚠️ Dictionary file not found. Using AI only.")
 
 RSS_FEEDS = {
     "The Daily Star": "https://www.thedailystar.net/rss.xml",
@@ -109,7 +76,7 @@ def fetch_headlines():
         if entry["headline"] not in seen:
             seen.add(entry["headline"])
             unique.append(entry)
-    return unique[:25]
+    return unique[:20]  # reduce to 20 headlines to save tokens
 
 def load_history():
     if os.path.exists(HISTORY_FILE):
@@ -122,72 +89,45 @@ def save_history(words):
         json.dump({"words": words}, f)
 
 def get_bengali_from_dict(word):
-    """Look up the Bangla meaning from the loaded dictionary."""
-    # Try exact match
     if word in bengali_dict:
         return bengali_dict[word]
-    # Try lowercase
     lower = word.lower()
     if lower in bengali_dict:
         return bengali_dict[lower]
-    # Try capitalised
     cap = word.capitalize()
     if cap in bengali_dict:
         return bengali_dict[cap]
-    # Try removing common suffixes
-    for suffix in ['s', 'ed', 'ing', 'es', 'ly', 'ment', 'tion', 'ness']:
-        if word.endswith(suffix):
-            stem = word[:-len(suffix)]
-            if stem in bengali_dict:
-                return bengali_dict[stem]
-            if stem.lower() in bengali_dict:
-                return bengali_dict[stem.lower()]
     return None
 
 # --------------------------------------------------------------
-# AI CALL – SINGLE CALL FOR VOCAB + MCQs
+# AI CALL – ONLY VOCAB + SUMMARY (NO MCQs)
 # --------------------------------------------------------------
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10),
-       retry=retry_if_exception_type((groq.RateLimitError,)))
-def generate_vocab_and_mcqs(client, headlines_data, past_words):
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+def generate_vocab_and_summary(client, headlines_data, past_words):
     headlines_text = "\n".join([f"- [{entry['source']}] {entry['headline']}" for entry in headlines_data])
     exclude = ", ".join(past_words[-50:])
 
     prompt = f"""
-You are an expert BCS and Bank job exam mentor with deep knowledge of Bengali and English vocabulary.
+You are an expert BCS and Bank job exam mentor.
 
 Today's headlines from Bangladeshi newspapers (with sources):
 {headlines_text}
 
-### Task 1: Generate 50 vocabulary words (numbered 1-50) from these headlines.
-- Difficulty: 15 Basic, 20 Intermediate, 15 Advanced.
+### Task 1: Generate 30 vocabulary words (numbered 1-30) from these headlines.
+- Difficulty: 10 Basic, 10 Intermediate, 10 Advanced.
 - Do NOT repeat: {exclude}
 - For each word provide EXACTLY these keys:
   "sl", "word", "pos", "level", "bengali", "definition", "synonyms", "antonyms", "example", "category"
 - The synonyms and antonyms must be given as a comma-separated string (not a list).
 
-### Task 2: Generate 10 multiple-choice questions (MCQs) from these words.
-For each MCQ, provide:
-- "question": the question text
-- "options": a list of 4 options (A, B, C, D)
-- "answer": the correct option letter (A, B, C, or D)
-- "explanation": a brief explanation of why the answer is correct
+### Task 2: Write a detailed 5-7 bullet Bengali summary (in Bengali script) of the most important topics covered in the headlines. Include the newspaper names. The summary must be at least 80 characters long.
 
-### CRITICAL INSTRUCTIONS FOR BENGALI MEANINGS:
-- Use ONLY standard, dictionary-level Bengali meanings.
-- Never use transliterations (e.g., "shahosi" is wrong; use "সাহসী").
-- Avoid word-by-word translation; provide the closest natural equivalent.
-- If a word has multiple meanings, pick the one that matches the headline context.
-- Never leave the "bengali" field empty.
-
-### Task 3: Write a detailed 5-7 bullet Bengali summary (in Bengali script) of the most important topics covered in the headlines. Include the newspaper names. The summary must be at least 100 characters long.
-
-Return a JSON object with keys: "vocab_list", "mcqs", and "bengali_summary".
+Return a JSON object with keys: "vocab_list" and "bengali_summary".
 """
     response = client.chat.completions.create(
         messages=[
-            {"role": "system", "content": "You are an expert Bengali lexicographer and exam creator. Always output valid JSON. For synonyms and antonyms, use a comma-separated string, not a list. Bengali meanings must be accurate, standard, and in proper Bengali script."},
+            {"role": "system", "content": "You are an expert Bengali lexicographer. Always output valid JSON. For synonyms and antonyms, use a comma-separated string, not a list. Bengali meanings must be accurate, standard, and in proper Bengali script."},
             {"role": "user", "content": prompt}
         ],
         model="llama-3.3-70b-versatile",
@@ -196,16 +136,10 @@ Return a JSON object with keys: "vocab_list", "mcqs", and "bengali_summary".
     )
     data = json.loads(response.choices[0].message.content)
     vocab = data.get("vocab_list", [])
-    mcqs = data.get("mcqs", [])
     summary = data.get("bengali_summary", "")
-    # Validate MCQs structure
-    validated_mcqs = []
-    for q in mcqs:
-        if isinstance(q, dict) and all(k in q for k in ("question", "options", "answer", "explanation")):
-            validated_mcqs.append(q)
     if not summary or len(summary.strip()) < 20:
         summary = build_fallback_summary(headlines_data)
-    return vocab, validated_mcqs, summary
+    return vocab, summary
 
 def build_fallback_summary(headlines_data):
     sources = {}
@@ -225,28 +159,23 @@ def build_fallback_summary(headlines_data):
     return summary
 
 # --------------------------------------------------------------
-# BUILD EXCEL – unchanged (but you have it already)
+# BUILD EXCEL – unchanged (use your existing function)
 # --------------------------------------------------------------
 
 def build_excel(vocab_list, mcqs):
-    # ... (keep your existing build_excel function – it's the same as before) ...
-    # I'll include it here for completeness, but you already have it.
-    wb = openpyxl.Workbook()
-    # ... (paste your existing build_excel code from earlier) ...
-    # For brevity, I'll skip the full code here, but it must be included in the final file.
-    # Since you have it, just keep it.
+    # ... (your existing build_excel – keep it) ...
     pass
 
 # --------------------------------------------------------------
-# BUILD HTML – unchanged
+# BUILD HTML – unchanged (use your existing function)
 # --------------------------------------------------------------
 
 def build_html(vocab_list, mcqs, summary, date_str):
-    # ... (keep your existing build_html function) ...
+    # ... (your existing build_html – keep it) ...
     pass
 
 def build_index_html(date_str):
-    # ... (keep your existing build_index_html function) ...
+    # ... (your existing build_index_html – keep it) ...
     pass
 
 # --------------------------------------------------------------
@@ -262,15 +191,9 @@ async def run_daily_job():
     print(f"   Found {len(headlines)} headlines.")
 
     past = load_history()
-    print("🧠 Generating vocabulary, MCQs and summary (single call)...")
-    try:
-        vocab, mcqs, summary = generate_vocab_and_mcqs(client, headlines, past)
-        print(f"   Generated {len(vocab)} words and {len(mcqs)} MCQs.")
-    except groq.RateLimitError as e:
-        print(f"⚠️ Rate limit hit: {e}. Will try to continue with existing data.")
-        # If we can't get new data, we might need to fall back to a cached version? For now, we'll abort.
-        # But we'll just re-raise to stop the job.
-        raise
+    print("🧠 Generating vocabulary and summary...")
+    vocab, summary = generate_vocab_and_summary(client, headlines, past)
+    print(f"   Generated {len(vocab)} words.")
 
     # ---- DICTIONARY LOOKUP ----
     if bengali_dict:
@@ -287,6 +210,9 @@ async def run_daily_job():
         print(f"   Found {dict_hits} words in dictionary.")
     else:
         print("⚠️ No dictionary loaded. Using AI meanings.")
+
+    # No MCQs – we skip them to save tokens
+    mcqs = []
 
     print("📊 Building Excel file...")
     try:
