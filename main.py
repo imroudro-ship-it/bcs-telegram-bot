@@ -389,7 +389,7 @@ def build_excel(vocab_list, mcqs):
     return EXCEL_FILE
 
 # --------------------------------------------------------------
-# BUILD HTML – IBA COMPENDIUM STYLE
+# BUILD HTML – MODERN WITH NAVIGATION
 # --------------------------------------------------------------
 
 def build_html(vocab_list, mcqs, summary, date_str):
@@ -398,7 +398,40 @@ def build_html(vocab_list, mcqs, summary, date_str):
     # Pre‑process summary
     summary_br = summary.replace('\n', '<br>')
 
-    # Group vocabulary by category
+    # --- Navigation links ---
+    # Gather all existing daily HTML files (excluding index)
+    all_dates = []
+    for f in DATA_DIR.glob("Vocabulary_*.html"):
+        d = f.stem.replace("Vocabulary_", "")
+        all_dates.append(d)
+    all_dates = sorted(all_dates)
+
+    # Find current date index
+    try:
+        idx = all_dates.index(date_str)
+    except ValueError:
+        idx = -1
+
+    prev_link = ""
+    next_link = ""
+    if idx > 0:
+        prev_date = all_dates[idx - 1]
+        prev_link = f'<a href="Vocabulary_{prev_date}.html" class="nav-link">← {prev_date}</a>'
+    if idx < len(all_dates) - 1:
+        next_date = all_dates[idx + 1]
+        next_link = f'<a href="Vocabulary_{next_date}.html" class="nav-link">{next_date} →</a>'
+
+    nav_html = f"""
+    <div class="nav-bar">
+        {prev_link}
+        <span class="nav-spacer">|</span>
+        <a href="index.html" class="nav-link">📋 Archive</a>
+        <span class="nav-spacer">|</span>
+        {next_link}
+    </div>
+    """
+
+    # --- Group vocabulary by category ---
     categories = {}
     for item in vocab_list:
         cat = item.get('category', 'Miscellaneous')
@@ -487,7 +520,6 @@ def build_html(vocab_list, mcqs, summary, date_str):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Daily Vocabulary – {date_str}</title>
     <style>
-        /* ── Reset & Base ── */
         * {{
             margin: 0;
             padding: 0;
@@ -504,8 +536,6 @@ def build_html(vocab_list, mcqs, summary, date_str):
             max-width: 1200px;
             margin: 0 auto;
         }}
-
-        /* ── Header / Hero ── */
         .hero {{
             background: linear-gradient(135deg, #0f2b4b, #1a4a7a);
             color: #ffffff;
@@ -540,8 +570,28 @@ def build_html(vocab_list, mcqs, summary, date_str):
         .hero .stat-item span {{
             font-weight: 700;
         }}
-
-        /* ── Summary Card ── */
+        .nav-bar {{
+            margin-top: 16px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            font-size: 14px;
+        }}
+        .nav-link {{
+            color: #fff;
+            text-decoration: none;
+            background: rgba(255,255,255,0.15);
+            padding: 4px 14px;
+            border-radius: 40px;
+            transition: 0.2s;
+        }}
+        .nav-link:hover {{
+            background: rgba(255,255,255,0.25);
+        }}
+        .nav-spacer {{
+            opacity: 0.4;
+        }}
         .summary-card {{
             background: #ffffff;
             border-radius: 12px;
@@ -561,8 +611,6 @@ def build_html(vocab_list, mcqs, summary, date_str):
             line-height: 1.7;
             white-space: pre-wrap;
         }}
-
-        /* ── Category Sections ── */
         .category-section {{
             background: #ffffff;
             border-radius: 12px;
@@ -591,8 +639,6 @@ def build_html(vocab_list, mcqs, summary, date_str):
             color: #475569;
             font-weight: 500;
         }}
-
-        /* ── Tables ── */
         .table-wrapper {{
             overflow-x: auto;
         }}
@@ -632,8 +678,6 @@ def build_html(vocab_list, mcqs, summary, date_str):
             color: #475569;
             font-size: 13px;
         }}
-
-        /* ── MCQs ── */
         .mcq-section {{
             background: #ffffff;
             border-radius: 12px;
@@ -693,8 +737,6 @@ def build_html(vocab_list, mcqs, summary, date_str):
             padding-top: 6px;
             border-top: 1px dashed #d1d9e6;
         }}
-
-        /* ── Footer ── */
         .footer {{
             text-align: center;
             margin-top: 30px;
@@ -703,8 +745,6 @@ def build_html(vocab_list, mcqs, summary, date_str):
             padding: 20px 0 10px;
             border-top: 1px solid #e2e8f0;
         }}
-
-        /* ── Responsive ── */
         @media (max-width: 700px) {{
             body {{ padding: 12px; }}
             .hero {{ padding: 24px 18px; }}
@@ -737,6 +777,7 @@ def build_html(vocab_list, mcqs, summary, date_str):
             <div class="stat-item">📂 <span>{len(categories)}</span> categories</div>
             <div class="stat-item">📝 <span>10</span> MCQs</div>
         </div>
+        {nav_html}
     </div>
 
     <!-- Summary -->
@@ -763,8 +804,118 @@ def build_html(vocab_list, mcqs, summary, date_str):
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html_content)
     return html_path
+
 # --------------------------------------------------------------
-# MAIN JOB – WITH FILE CHECKS
+# BUILD INDEX PAGE (ARCHIVE)
+# --------------------------------------------------------------
+
+def build_index_html(date_str):
+    """Generate a master index page listing all available daily HTML files."""
+    # Get all existing Vocabulary_*.html files
+    all_files = sorted(DATA_DIR.glob("Vocabulary_*.html"), reverse=True)
+    # Build list of links
+    links_html = ""
+    for f in all_files:
+        file_date = f.stem.replace("Vocabulary_", "")
+        is_today = (file_date == date_str)
+        active_class = ' class="today"' if is_today else ''
+        links_html += f'<li{active_class}><a href="{f.name}">{file_date}</a></li>\n'
+
+    index_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Vocabulary Archive</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f4f8;
+            padding: 30px 20px;
+            color: #1e293b;
+        }}
+        .container {{
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+        }}
+        h1 {{
+            font-size: 28px;
+            color: #0f2b4b;
+            margin-bottom: 6px;
+        }}
+        .subtitle {{
+            color: #64748b;
+            font-size: 16px;
+            margin-bottom: 24px;
+        }}
+        ul {{
+            list-style: none;
+            padding: 0;
+        }}
+        li {{
+            padding: 10px 14px;
+            border-bottom: 1px solid #e9edf2;
+        }}
+        li:last-child {{
+            border-bottom: none;
+        }}
+        li a {{
+            text-decoration: none;
+            color: #1a4a7a;
+            font-weight: 500;
+            display: block;
+        }}
+        li a:hover {{
+            color: #0f2b4b;
+            text-decoration: underline;
+        }}
+        .today {{
+            background: #e9edf2;
+            border-radius: 6px;
+            font-weight: 600;
+        }}
+        .today a {{
+            color: #0f2b4b;
+        }}
+        .footer {{
+            margin-top: 30px;
+            font-size: 13px;
+            color: #94a3b8;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 16px;
+            text-align: center;
+        }}
+        @media (max-width: 600px) {{
+            .container {{ padding: 20px; }}
+        }}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📚 Daily Vocabulary Archive</h1>
+    <div class="subtitle">BCS & Bank Exam Preparation</div>
+    <ul>
+        {links_html}
+    </ul>
+    <div class="footer">
+        Generated automatically • Updated daily
+    </div>
+</div>
+</body>
+</html>
+"""
+    index_path = DATA_DIR / "index.html"
+    with open(index_path, "w", encoding="utf-8") as f:
+        f.write(index_content)
+    return index_path
+
+# --------------------------------------------------------------
+# MAIN JOB
 # --------------------------------------------------------------
 
 async def run_daily_job():
@@ -799,6 +950,14 @@ async def run_daily_job():
     except Exception as e:
         print(f"   ❌ Error building HTML: {e}")
 
+    # Build/update the index page
+    print("📋 Building archive index...")
+    try:
+        index_path = build_index_html(date_str)
+        print(f"   Index saved to {index_path}")
+    except Exception as e:
+        print(f"   ❌ Error building index: {e}")
+
     save_history(past + [w["word"] for w in vocab])
     print("💾 History updated.")
 
@@ -808,7 +967,6 @@ async def run_daily_job():
         try:
             bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-            # Check if Excel exists before sending
             if EXCEL_FILE.exists():
                 with open(EXCEL_FILE, "rb") as f:
                     await bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=f, caption="📊 Daily Vocabulary Bank (Excel)")
@@ -816,7 +974,6 @@ async def run_daily_job():
             else:
                 print("   ⚠️ Excel file not found – skipping.")
 
-            # Check if HTML exists
             if html_path.exists():
                 with open(html_path, "rb") as f:
                     await bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=f, caption="📄 Daily Vocabulary Bank (HTML – open on any device)")
@@ -824,7 +981,6 @@ async def run_daily_job():
             else:
                 print("   ⚠️ HTML file not found – skipping.")
 
-            # Send summary
             if not summary or len(summary.strip()) < 10:
                 summary = "আজকের সংক্ষিপ্ত সারাংশ তৈরি করা সম্ভব হয়নি। তবে ভোকাবুলারি ফাইলগুলো দেখুন।"
             await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=f"📰 **Today's Summary**\n\n{summary}", parse_mode="Markdown")
@@ -835,7 +991,7 @@ async def run_daily_job():
     else:
         print("⚠️ Telegram credentials missing. Skipping send.")
 
-    print("✅ Job done – Excel and HTML generated.")
+    print("✅ Job done – Excel, HTML and index generated.")
 
 if __name__ == "__main__":
     asyncio.run(run_daily_job())
