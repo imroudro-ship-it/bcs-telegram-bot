@@ -30,18 +30,51 @@ DATA_DIR.mkdir(exist_ok=True)
 EXCEL_FILE = DATA_DIR / "Vocabulary_Bank.xlsx"
 HISTORY_FILE = "history.json"
 
-# Load dictionary
+# --------------------------------------------------------------
+# LOAD DICTIONARY – handles both dict and list formats
+# --------------------------------------------------------------
 DICT_FILE = Path("bangla_dictionary.json")
 bengali_dict = {}
-if DICT_FILE.exists():
+
+def load_dictionary():
+    global bengali_dict
+    if not DICT_FILE.exists():
+        print("⚠️ Dictionary file not found. Using AI only.")
+        return
     try:
         with open(DICT_FILE, "r", encoding="utf-8") as f:
-            bengali_dict = json.load(f)
-        print(f"✅ Loaded {len(bengali_dict)} dictionary entries.")
-    except:
-        print("⚠️ Failed to load dictionary. Using AI only.")
+            data = json.load(f)
+        # If it's already a dict, use it
+        if isinstance(data, dict):
+            bengali_dict = data
+        elif isinstance(data, list):
+            # Try to convert list to dict
+            converted = {}
+            for item in data:
+                if isinstance(item, dict):
+                    # Look for English and Bengali keys (common variants)
+                    eng = item.get("en") or item.get("English") or item.get("word") or item.get("eng")
+                    ben = item.get("bn") or item.get("Bangla") or item.get("bengali") or item.get("meaning")
+                    if eng and ben:
+                        converted[eng] = ben
+                elif isinstance(item, list) and len(item) >= 2:
+                    # Assume [english, bengali]
+                    converted[item[0]] = item[1]
+            if converted:
+                bengali_dict = converted
+                print(f"✅ Converted list to dictionary: {len(bengali_dict)} entries.")
+            else:
+                print("⚠️ Could not convert list to dictionary. Using AI only.")
+        else:
+            print("⚠️ Dictionary format not recognized. Using AI only.")
+    except Exception as e:
+        print(f"⚠️ Failed to load dictionary: {e}")
+
+load_dictionary()
+if bengali_dict:
+    print(f"✅ Loaded {len(bengali_dict)} dictionary entries.")
 else:
-    print("⚠️ Dictionary file not found. Using AI only.")
+    print("⚠️ No dictionary loaded. Using AI only.")
 
 RSS_FEEDS = {
     "The Daily Star": "https://www.thedailystar.net/rss.xml",
@@ -94,7 +127,7 @@ def save_history(words):
 # --------------------------------------------------------------
 
 def get_bengali_from_dict(word):
-    if not word:
+    if not word or not bengali_dict:
         return None
     clean = re.sub(r'[^a-zA-Z]', '', word).lower()
     if not clean:
