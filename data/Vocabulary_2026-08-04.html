@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Vocabulary – 2026-08-04</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans Bengali', sans-serif;
+            background: #f0f4f8;
+            color: #1e293b;
+            padding: 20px;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .hero {
+            background: linear-gradient(135deg, #0f2b4b, #1a4a7a);
+            color: #ffffff;
+            border-radius: 16px;
+            padding: 40px 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 30px rgba(15, 43, 75, 0.25);
+        }
+        .hero h1 {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .hero .date {
+            font-size: 16px;
+            opacity: 0.8;
+            margin-top: 6px;
+        }
+        .hero .stats {
+            display: flex;
+            gap: 24px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+        .hero .stat-item {
+            background: rgba(255,255,255,0.12);
+            padding: 6px 16px;
+            border-radius: 40px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .hero .stat-item span {
+            font-weight: 700;
+        }
+        .nav-bar {
+            margin-top: 16px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            font-size: 14px;
+        }
+        .nav-link {
+            color: #fff;
+            text-decoration: none;
+            background: rgba(255,255,255,0.15);
+            padding: 4px 14px;
+            border-radius: 40px;
+            transition: 0.2s;
+        }
+        .nav-link:hover {
+            background: rgba(255,255,255,0.25);
+        }
+        .nav-spacer {
+            opacity: 0.4;
+        }
+        .summary-card {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 24px 28px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border-left: 5px solid #1a4a7a;
+        }
+        .summary-card h3 {
+            font-size: 16px;
+            color: #1a4a7a;
+            margin-bottom: 10px;
+        }
+        .summary-card p {
+            font-size: 15px;
+            color: #334155;
+            line-height: 1.7;
+            white-space: pre-wrap;
+        }
+        .category-section {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px 24px 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #e9edf2;
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+        .category-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #0f2b4b;
+        }
+        .word-count {
+            font-size: 13px;
+            background: #e9edf2;
+            padding: 2px 14px;
+            border-radius: 40px;
+            color: #475569;
+            font-weight: 500;
+        }
+        .table-wrapper {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        thead th {
+            background: #f1f5f9;
+            color: #1e293b;
+            font-weight: 600;
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 2px solid #d1d9e6;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        tbody td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e9edf2;
+            vertical-align: top;
+        }
+        tbody tr:hover {
+            background: #f8fafc;
+        }
+        .word-cell {
+            font-weight: 600;
+            color: #0f2b4b;
+        }
+        .bengali-cell {
+            color: #1e293b;
+        }
+        .example-cell {
+            font-style: italic;
+            color: #475569;
+            font-size: 13px;
+        }
+        .mcq-section {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px 24px 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #e9edf2;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+        }
+        .section-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #0f2b4b;
+        }
+        .badge {
+            font-size: 13px;
+            background: #1a4a7a;
+            color: #fff;
+            padding: 2px 14px;
+            border-radius: 40px;
+            font-weight: 500;
+        }
+        .mcq-card {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 14px;
+            border-left: 4px solid #1a4a7a;
+        }
+        .mcq-question {
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        .q-number {
+            color: #1a4a7a;
+            font-weight: 700;
+            margin-right: 6px;
+        }
+        .options-list {
+            list-style: none;
+            padding-left: 24px;
+            margin-bottom: 8px;
+        }
+        .option {
+            font-size: 14px;
+            color: #334155;
+            padding: 2px 0;
+        }
+        .mcq-answer {
+            font-size: 14px;
+            color: #0f2b4b;
+            padding-top: 6px;
+            border-top: 1px dashed #d1d9e6;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 13px;
+            color: #94a3b8;
+            padding: 20px 0 10px;
+            border-top: 1px solid #e2e8f0;
+        }
+        @media (max-width: 700px) {
+            body { padding: 12px; }
+            .hero { padding: 24px 18px; }
+            .hero h1 { font-size: 22px; }
+            .hero .stats { gap: 12px; }
+            .hero .stat-item { font-size: 12px; padding: 4px 12px; }
+            .category-section { padding: 14px 14px 18px; }
+            .category-header h2 { font-size: 16px; }
+            table { font-size: 12px; }
+            thead th, tbody td { padding: 6px 8px; }
+            .mcq-card { padding: 12px 14px; }
+            .options-list { padding-left: 16px; }
+        }
+        @media print {
+            body { background: #fff; padding: 0; }
+            .hero { box-shadow: none; }
+            .category-section, .summary-card, .mcq-section { box-shadow: none; border: 1px solid #ddd; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- Hero -->
+    <div class="hero">
+        <h1>📘 Daily Vocabulary Bank</h1>
+        <div class="date">2026-08-04</div>
+        <div class="stats">
+            <div class="stat-item">📚 <span>38</span> words</div>
+            <div class="stat-item">📂 <span>12</span> categories</div>
+            <div class="stat-item">📝 <span>10</span> MCQs</div>
+        </div>
+        
+    <div class="nav-bar">
+        
+        <span class="nav-spacer">|</span>
+        <a href="index.html" class="nav-link">📋 Archive</a>
+        <span class="nav-spacer">|</span>
+        
+    </div>
+    
+    </div>
+
+    <!-- Summary -->
+    <div class="summary-card">
+        <h3>📰 Today's Summary</h3>
+        <p>📰 আজকের প্রধান সংবাদ (সূত্র সহ)<br><br>▪️ The Daily Star<br>   - Ramisa rape and murder: Sohel Rana mentions new name as charges framed<br>   - Why Bangladesh must pivot to renewable energy now<br>   - The forgotten art of Bengali advertising<br><br>▪️ The Business Standard<br>   - Commodities continue to be dearer<br>   - Mithun, Mushfiqur fifties guide Tigers to win in warm-up<br>   - Jesus takes centre stage as Brazil win Copa America<br><br>🔹 অন্যান্য সংবাদপত্র থেকেও গুরুত্বপূর্ণ শব্দ সংগ্রহ করা হয়েছে।</p>
+    </div>
+
+    <!-- Vocabulary by Category -->
+    
+        <div class="category-section">
+            <div class="category-header">
+                <h2>business</h2>
+                <span class="word-count">2 words</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Bengali</th>
+                            <th>POS</th>
+                            <th>Synonyms</th>
+                            <th>Antonyms</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        
+                        <tr>
+                            <td class="word-cell"><strong>pivot</strong></td>
+                            <td class="bengali-cell">কেনদুল</td>
+                            <td>verb</td>
+                            <td>turn, shift</td>
+                            <td>stay, remain</td>
+                            <td class="example-cell">The company will pivot to a new business model.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>advertising</strong></td>
+                            <td class="bengali-cell">কসেনে \u09aaরনে</td>
+                            <td>noun</td>
+                            <td>promotion, marketing</td>
+                            <td>none</td>
+                            <td class="example-cell">The forgotten art of Bengali advertising is being revived.</td>
+                        </tr>
+            
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="category-section">
+            <div class="category-header">
+                <h2>crime</h2>
+                <span class="word-count">4 words</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Bengali</th>
+                            <th>POS</th>
+                            <th>Synonyms</th>
+                            <th>Antonyms</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        
+                        <tr>
+                            <td class="word-cell"><strong>rape</strong></td>
+                            <td class="bengali-cell">জারুন</td>
+                            <td>noun</td>
+                            <td>assault, abuse</td>
+                            <td>consent, agreement</td>
+                            <td class="example-cell">The victim reported the rape to the police.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>murder</strong></td>
+                            <td class="bengali-cell">মুরদ্ত</td>
+                            <td>noun</td>
+                            <td>killing, homicide</td>
+                            <td>life, survival</td>
+                            <td class="example-cell">The murder took place in the middle of the night.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>charges</strong></td>
+                            <td class="bengali-cell">কসেনে \u0995রন</td>
+                            <td>noun</td>
+                            <td>accusation, allegation</td>
+                            <td>none</td>
+                            <td class="example-cell">The suspect is facing charges of murder.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>framed</strong></td>
+                            <td class="bengali-cell">কসেনে \u0995রন</td>
+                            <td>verb</td>
+                            <td>accuse, charge</td>
+                            <td>clear, exonerate</td>
+                            <td class="example-cell">The suspect was framed for the crime.</td>
+                        </tr>
+            
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="category-section">
+            <div class="category-header">
+                <h2>culture</h2>
+                <span class="word-count">3 words</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Bengali</th>
+                            <th>POS</th>
+                            <th>Synonyms</th>
+                            <th>Antonyms</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        
+                        <tr>
+                            <td class="word-cell"><strong>forgotten</strong></td>
+                            <td class="bengali-cell">কসেনে \u09acেলে</td>
+                            <td>adjective</td>
+                            <td>overlooked, neglected</td>
+                            <td>remembered, recalled</td>
+                            <td class="example-cell">The forgotten art of Bengali advertising is being revived.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>art</strong></td>
+                            <td class="bengali-cell">খরেশ্থ</td>
+                            <td>noun</td>
+                            <td>creation, expression</td>
+                            <td>none</td>
+                            <td class="example-cell">The forgotten art of Bengali advertising is being revived.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>bengali</strong></td>
+                            <td class="bengali-cell">জলে</td>
+                            <td>adjective</td>
+                            <td>Bangladeshi</td>
+                            <td>none</td>
+                            <td class="example-cell">The forgotten art of Bengali advertising is being revived.</td>
+                        </tr>
+            
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="category-section">
+            <div class="category-header">
+                <h2>economy</h2>
+                <span class="word-count">5 words</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Bengali</th>
+                            <th>POS</th>
+                            <th>Synonyms</th>
+                            <th>Antonyms</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        
+                        <tr>
+                            <td class="word-cell"><strong>boom</strong></td>
+                            <td class="bengali-cell">আতেন্দ</td>
+                            <td>noun</td>
+                            <td>expansion, growth</td>
+                            <td>recession, decline</td>
+                            <td class="example-cell">The country is experiencing a boom in the tech industry.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>commodities</strong></td>
+                            <td class="bengali-cell">কসেনে \u09aaদুল</td>
+                            <td>noun</td>
+                            <td>goods, products</td>
+                            <td>services, experiences</td>
+                            <td class="example-cell">The price of commodities is increasing.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>dearer</strong></td>
+                            <td class="bengali-cell">ঔেরে</td>
+                            <td>adjective</td>
+                            <td>more expensive, costlier</td>
+                            <td>cheaper, less expensive</td>
+                            <td class="example-cell">The commodities are becoming dearer.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>top-heavy</strong></td>
+                            <td class="bengali-cell">এত \u0995সেনে</td>
+                            <td>adjective</td>
+                            <td>unbalanced, uneven</td>
+                            <td>balanced, even</td>
+                            <td class="example-cell">The country's economy is top-heavy, with too much reliance on one industry.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>boom</strong></td>
+                            <td class="bengali-cell">আতেন্দ</td>
+                            <td>noun</td>
+                            <td>expansion, growth</td>
+                            <td>recession, decline</td>
+                            <td class="example-cell">The country is experiencing a boom in the tech industry.</td>
+                        </tr>
+            
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="category-section">
+            <div class="category-header">
+                <h2>education</h2>
+                <span class="word-count">1 words</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Bengali</th>
+                            <th>POS</th>
+                            <th>Synonyms</th>
+                            <th>Antonyms</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        
+                        <tr>
+                            <td class="word-cell"><strong>lesson</strong></td>
+                            <td class="bengali-cell">কসেনে \u09aaান</td>
+                            <td>noun</td>
+                            <td>advice, guidance</td>
+                            <td>none</td>
+                            <td class="example-cell">The country can learn a lesson from India's economic boom.</td>
+                        </tr>
+            
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="category-section">
+            <div class="category-header">
+                <h2>environment</h2>
+                <span class="word-count">4 words</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Bengali</th>
+                            <th>POS</th>
+                            <th>Synonyms</th>
+                            <th>Antonyms</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        
+                        <tr>
+                            <td class="word-cell"><strong>renewable</strong></td>
+                            <td class="bengali-cell">পুনরনোনেথে</td>
+                            <td>adjective</td>
+                            <td>sustainable, eco-friendly</td>
+                            <td>non-renewable, unsustainable</td>
+                            <td class="example-cell">Renewable energy sources are becoming more popular.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>sustainable</strong></td>
+                            <td class="bengali-cell">কসেনে \u0995রন</td>
+                            <td>adjective</td>
+                            <td>eco-friendly, renewable</td>
+                            <td>unsustainable, harmful</td>
+                            <td class="example-cell">The company is committed to sustainable practices.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>eco-friendly</strong></td>
+                            <td class="bengali-cell">কসেনে \u0995রন</td>
+                            <td>adjective</td>
+                            <td>sustainable, renewable</td>
+                            <td>harmful, polluting</td>
+                            <td class="example-cell">The company is using eco-friendly packaging.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>environment</strong></td>
+                            <td class="bengali-cell">কসেনে \u0995রন</td>
+                            <td>noun</td>
+                            <td>nature, ecosystem</td>
+                            <td>none</td>
+                            <td class="example-cell">The company is committed to protecting the environment.</td>
+                        </tr>
+            
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="category-section">
+            <div class="category-header">
+                <h2>general</h2>
+                <span class="word-count">1 words</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Bengali</th>
+                            <th>POS</th>
+                            <th>Synonyms</th>
+                            <th>Antonyms</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        
+                        <tr>
+                            <td class="word-cell"><strong>name</strong></td>
+                            <td class="bengali-cell">কসেনে</td>
+                            <td>noun</td>
+                            <td>title, label</td>
+                            <td>none</td>
+                            <td class="example-cell">The suspect mentioned a new name in the investigation.</td>
+                        </tr>
+            
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="category-section">
+            <div class="category-header">
+                <h2>geography</h2>
+                <span class="word-count">4 words</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Bengali</th>
+                            <th>POS</th>
+                            <th>Synonyms</th>
+                            <th>Antonyms</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        
+                        <tr>
+                            <td class="word-cell"><strong>england</strong></td>
+                            <td class="bengali-cell">এন্যলেনদ</td>
+                            <td>proper noun</td>
+                            <td>UK, Britain</td>
+                            <td>none</td>
+                            <td class="example-cell">The team is playing against England in the next match.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>iran</strong></td>
+                            <td class="bengali-cell">এরান</td>
+                            <td>proper noun</td>
+                            <td>Persia</td>
+                            <td>none</td>
+                            <td class="example-cell">The historian is studying the Iran war.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>doha</strong></td>
+                            <td class="bengali-cell">দোহা</td>
+                            <td>proper noun</td>
+                            <td>Qatar</td>
+                            <td>none</td>
+                            <td class="example-cell">The historian is writing a diary from Doha.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>brazil</strong></td>
+                            <td class="bengali-cell">জরাসল</td>
+                            <td>proper noun</td>
+                            <td>none</td>
+                            <td>none</td>
+                            <td class="example-cell">Brazil won the Copa America.</td>
+                        </tr>
+            
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="category-section">
+            <div class="category-header">
+                <h2>history</h2>
+                <span class="word-count">1 words</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Bengali</th>
+                            <th>POS</th>
+                            <th>Synonyms</th>
+                            <th>Antonyms</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        
+                        <tr>
+                            <td class="word-cell"><strong>historian</strong></td>
+                            <td class="bengali-cell">এতেহাসে</td>
+                            <td>noun</td>
+                            <td>scholar, researcher</td>
+                            <td>none</td>
+                            <td class="example-cell">The historian is studying the Iran war.</td>
+                        </tr>
+            
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="category-section">
+            <div class="category-header">
+                <h2>literature</h2>
+                <span class="word-count">1 words</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Bengali</th>
+                            <th>POS</th>
+                            <th>Synonyms</th>
+                            <th>Antonyms</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        
+                        <tr>
+                            <td class="word-cell"><strong>diary</strong></td>
+                            <td class="bengali-cell">দেনে \u0995সেনে</td>
+                            <td>noun</td>
+                            <td>journal, log</td>
+                            <td>none</td>
+                            <td class="example-cell">The historian is keeping a diary of his experiences.</td>
+                        </tr>
+            
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="category-section">
+            <div class="category-header">
+                <h2>religion</h2>
+                <span class="word-count">1 words</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Bengali</th>
+                            <th>POS</th>
+                            <th>Synonyms</th>
+                            <th>Antonyms</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        
+                        <tr>
+                            <td class="word-cell"><strong>jesus</strong></td>
+                            <td class="bengali-cell">জেসু</td>
+                            <td>proper noun</td>
+                            <td>Christ, Messiah</td>
+                            <td>none</td>
+                            <td class="example-cell">Jesus is a popular name in Brazil.</td>
+                        </tr>
+            
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="category-section">
+            <div class="category-header">
+                <h2>sports</h2>
+                <span class="word-count">11 words</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Bengali</th>
+                            <th>POS</th>
+                            <th>Synonyms</th>
+                            <th>Antonyms</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        
+                        <tr>
+                            <td class="word-cell"><strong>warm-up</strong></td>
+                            <td class="bengali-cell">আকুল \u0995রন</td>
+                            <td>noun</td>
+                            <td>practice, preparation</td>
+                            <td>game, match</td>
+                            <td class="example-cell">The team played a warm-up match before the tournament.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>guide</strong></td>
+                            <td class="bengali-cell">আকুল \u0995রন</td>
+                            <td>verb</td>
+                            <td>lead, direct</td>
+                            <td>follow, obey</td>
+                            <td class="example-cell">The coach will guide the team to victory.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>centre</strong></td>
+                            <td class="bengali-cell">কেনদুল</td>
+                            <td>noun</td>
+                            <td>middle, central</td>
+                            <td>edge, periphery</td>
+                            <td class="example-cell">The player took centre stage in the match.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>stage</strong></td>
+                            <td class="bengali-cell">কসেনদুল</td>
+                            <td>noun</td>
+                            <td>level, phase</td>
+                            <td>beginning, end</td>
+                            <td class="example-cell">The team is at the final stage of the tournament.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>Copa</strong></td>
+                            <td class="bengali-cell">কোপা</td>
+                            <td>proper noun</td>
+                            <td>tournament, championship</td>
+                            <td>friendly, exhibition</td>
+                            <td class="example-cell">The team won the Copa America.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>survival</strong></td>
+                            <td class="bengali-cell">কসেনে \u0995লে</td>
+                            <td>noun</td>
+                            <td>existence, life</td>
+                            <td>death, extinction</td>
+                            <td class="example-cell">The team is fighting for survival in the tournament.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>maiden</strong></td>
+                            <td class="bengali-cell">কুমেলে</td>
+                            <td>adjective</td>
+                            <td>first, initial</td>
+                            <td>last, final</td>
+                            <td class="example-cell">The team is seeking their maiden win in the tournament.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>mighty</strong></td>
+                            <td class="bengali-cell">খোরে</td>
+                            <td>adjective</td>
+                            <td>powerful, strong</td>
+                            <td>weak, powerless</td>
+                            <td class="example-cell">The team is facing a mighty opponent in the next match.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>fifties</strong></td>
+                            <td class="bengali-cell">কসেনে করন</td>
+                            <td>noun</td>
+                            <td>fifty, half-century</td>
+                            <td>none</td>
+                            <td class="example-cell">The player scored two fifties in the match.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>tigers</strong></td>
+                            <td class="bengali-cell">জলে</td>
+                            <td>noun</td>
+                            <td>big cat, predator</td>
+                            <td>none</td>
+                            <td class="example-cell">The Bangladesh cricket team is known as the Tigers.</td>
+                        </tr>
+            
+                        <tr>
+                            <td class="word-cell"><strong>win</strong></td>
+                            <td class="bengali-cell">জেন</td>
+                            <td>verb</td>
+                            <td>achieve, succeed</td>
+                            <td>lose, fail</td>
+                            <td class="example-cell">The team won the match.</td>
+                        </tr>
+            
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+
+    <!-- MCQs -->
+    
+        <div class="mcq-section">
+            <div class="section-header">
+                <h2>📝 Practice Test</h2>
+                <span class="badge">10 Questions</span>
+            </div>
+        
+            <div class="mcq-card">
+                <div class="mcq-question">
+                    <span class="q-number">1.</span>
+                    <span>Which country is often associated with the historian's research on medieval times?</span>
+                </div>
+                <ul class="options-list">
+                    <li class="option">France</li><li class="option">England</li><li class="option">Germany</li><li class="option">Italy</li>
+                </ul>
+                <div class="mcq-answer">
+                    <strong>✅ Answer:</strong> B – England is often associated with medieval history, given its rich historical heritage and numerous medieval sites.
+                </div>
+            </div>
+            
+            <div class="mcq-card">
+                <div class="mcq-question">
+                    <span class="q-number">2.</span>
+                    <span>What is a diary typically used for?</span>
+                </div>
+                <ul class="options-list">
+                    <li class="option">Recording historical events</li><li class="option">Writing letters to friends</li><li class="option">Documenting daily personal experiences</li><li class="option">Conducting scientific research</li>
+                </ul>
+                <div class="mcq-answer">
+                    <strong>✅ Answer:</strong> C – A diary is a personal record of an individual's daily experiences, thoughts, and feelings.
+                </div>
+            </div>
+            
+            <div class="mcq-card">
+                <div class="mcq-question">
+                    <span class="q-number">3.</span>
+                    <span>Which of the following animals is known for its distinctive stripes?</span>
+                </div>
+                <ul class="options-list">
+                    <li class="option">Lions</li><li class="option">Bears</li><li class="option">Tigers</li><li class="option">Wolves</li>
+                </ul>
+                <div class="mcq-answer">
+                    <strong>✅ Answer:</strong> C – Tigers are known for their distinctive orange and black stripes, which act as camouflage in their natural habitats.
+                </div>
+            </div>
+            
+            <div class="mcq-card">
+                <div class="mcq-question">
+                    <span class="q-number">4.</span>
+                    <span>What does the term 'pivot' mean in a business context?</span>
+                </div>
+                <ul class="options-list">
+                    <li class="option">To stay the same</li><li class="option">To change direction</li><li class="option">To increase production</li><li class="option">To decrease staff</li>
+                </ul>
+                <div class="mcq-answer">
+                    <strong>✅ Answer:</strong> B – In a business context, to pivot means to change direction or strategy, often in response to changes in the market or industry.
+                </div>
+            </div>
+            
+            <div class="mcq-card">
+                <div class="mcq-question">
+                    <span class="q-number">5.</span>
+                    <span>What does the phrase 'dearer than' mean?</span>
+                </div>
+                <ul class="options-list">
+                    <li class="option">More expensive than</li><li class="option">Less expensive than</li><li class="option">Equally expensive as</li><li class="option">Completely free</li>
+                </ul>
+                <div class="mcq-answer">
+                    <strong>✅ Answer:</strong> A – The phrase 'dearer than' means more expensive than something else, often used to compare prices or costs.
+                </div>
+            </div>
+            
+            <div class="mcq-card">
+                <div class="mcq-question">
+                    <span class="q-number">6.</span>
+                    <span>What is the primary goal of competing in a sporting event?</span>
+                </div>
+                <ul class="options-list">
+                    <li class="option">To lose</li><li class="option">To draw</li><li class="option">To have fun</li><li class="option">To win</li>
+                </ul>
+                <div class="mcq-answer">
+                    <strong>✅ Answer:</strong> D – The primary goal of competing in a sporting event is often to win, although having fun and improving skills are also important aspects.
+                </div>
+            </div>
+            
+            <div class="mcq-card">
+                <div class="mcq-question">
+                    <span class="q-number">7.</span>
+                    <span>Which decade is often associated with the rise of rock and roll music?</span>
+                </div>
+                <ul class="options-list">
+                    <li class="option">Forties</li><li class="option">Fifties</li><li class="option">Sixties</li><li class="option">Seventies</li>
+                </ul>
+                <div class="mcq-answer">
+                    <strong>✅ Answer:</strong> B – The fifties are often associated with the rise of rock and roll music, with artists like Elvis Presley and Chuck Berry gaining popularity during this time.
+                </div>
+            </div>
+            
+            <div class="mcq-card">
+                <div class="mcq-question">
+                    <span class="q-number">8.</span>
+                    <span>What is the role of a guide in a museum?</span>
+                </div>
+                <ul class="options-list">
+                    <li class="option">To clean the exhibits</li><li class="option">To manage the staff</li><li class="option">To provide information to visitors</li><li class="option">To handle the finances</li>
+                </ul>
+                <div class="mcq-answer">
+                    <strong>✅ Answer:</strong> C – A guide in a museum is responsible for providing information and explanations to visitors about the exhibits and collections on display.
+                </div>
+            </div>
+            
+            <div class="mcq-card">
+                <div class="mcq-question">
+                    <span class="q-number">9.</span>
+                    <span>What are charges in a legal context?</span>
+                </div>
+                <ul class="options-list">
+                    <li class="option">Fees for a service</li><li class="option">Penalties for a crime</li><li class="option">Taxes on income</li><li class="option">All of the above</li>
+                </ul>
+                <div class="mcq-answer">
+                    <strong>✅ Answer:</strong> D – In a legal context, charges can refer to fees for a service, penalties for a crime, or taxes on income, depending on the specific situation.
+                </div>
+            </div>
+            
+            <div class="mcq-card">
+                <div class="mcq-question">
+                    <span class="q-number">10.</span>
+                    <span>Which of the following is an example of a historical figure who might be studied by a historian?</span>
+                </div>
+                <ul class="options-list">
+                    <li class="option">A modern-day athlete</li><li class="option">A fictional character</li><li class="option">A medieval king</li><li class="option">A scientist from the future</li>
+                </ul>
+                <div class="mcq-answer">
+                    <strong>✅ Answer:</strong> C – A historian would typically study historical figures from the past, such as a medieval king, to understand their role in shaping historical events and societies.
+                </div>
+            </div>
+            
+        </div>
+        
+
+    <!-- Footer -->
+    <div class="footer">
+        Generated automatically • Daily Star Vocabulary Bank • For BCS & Bank Exams
+    </div>
+
+</div>
+</body>
+</html>
