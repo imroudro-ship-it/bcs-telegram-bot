@@ -8,3 +8,4 @@ tenacity
 requests
 jinja2
 flask
+reportlab
