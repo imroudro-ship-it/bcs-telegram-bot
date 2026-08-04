@@ -38,7 +38,6 @@ TIMEZONE = pytz.timezone("Asia/Dhaka")
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 EXCEL_FILE = DATA_DIR / "Vocabulary_Bank.xlsx"
-PDF_FILE = DATA_DIR / "Vocabulary_Bank.pdf"   # we'll also include date
 HISTORY_FILE = "history.json"
 FONT_DIR = DATA_DIR / "fonts"
 FONT_DIR.mkdir(exist_ok=True)
@@ -158,9 +157,9 @@ def build_fallback_summary(headlines_data):
             sources[src] = []
         sources[src].append(entry["headline"])
 
-    summary = "📰 **আজকের প্রধান সংবাদ (সূত্র সহ)**\n\n"
+    summary = "📰 আজকের প্রধান সংবাদ (সূত্র সহ)\n\n"
     for src, headlines in sources.items():
-        summary += f"▪️ **{src}**\n"
+        summary += f"▪️ {src}\n"
         for h in headlines[:3]:
             summary += f"   - {h}\n"
         summary += "\n"
@@ -220,17 +219,222 @@ Each object must have keys: question, options, answer, explanation.
         return []
 
 # --------------------------------------------------------------
-# BUILD EXCEL – GEMINI STYLE (3 SHEETS) – unchanged
+# BUILD EXCEL – GEMINI STYLE (3 SHEETS)
 # --------------------------------------------------------------
 
 def build_excel(vocab_list, mcqs):
-    # ... (exactly the same as your current build_excel) ...
-    # I'll include it fully in the final answer, but for brevity here I'll skip.
-    # In the final response, I will paste the complete code.
-    pass
+    wb = openpyxl.Workbook()
+
+    # ---------- Sheet 1: Vocabulary ----------
+    ws = wb.active
+    ws.title = "Daily Star Vocabulary"
+
+    # Header styling
+    navy = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    light_navy = PatternFill(start_color="2F5597", end_color="2F5597", fill_type="solid")
+    even = PatternFill(start_color="F2F5F9", end_color="F2F5F9", fill_type="solid")
+    white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+    border = Border(left=Side(style="thin"), right=Side(style="thin"),
+                    top=Side(style="thin"), bottom=Side(style="thin"))
+
+    # Title rows (merged)
+    ws.merge_cells("A1:J1")
+    ws["A1"] = "THE DAILY STAR - DAILY VOCABULARY BANK (BCS & JOB PREP SPECIAL)"
+    ws["A1"].font = Font(size=16, bold=True, color="FFFFFF")
+    ws["A1"].fill = navy
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.merge_cells("A2:J2")
+    ws["A2"] = "Curated from Today's Headlines, Editorials & Reports | Includes Meanings, Parts of Speech, Bengali Translations & Exam Examples"
+    ws["A2"].font = Font(size=10, italic=True, color="FFFFFF")
+    ws["A2"].fill = light_navy
+    ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
+
+    headers = ["SL No", "Word / Idiom", "Part of Speech", "Difficulty Level",
+               "Bengali Meaning (বাংলা অর্থ)", "English Definition",
+               "Synonyms", "Antonyms", "Contextual Example (Daily Star)", "Category / Topic"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col)
+        cell.value = h
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = navy
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
+
+    # Write vocabulary rows
+    for idx, item in enumerate(vocab_list, 5):
+        ws.row_dimensions[idx].height = 26
+        row_data = [
+            idx - 4,  # SL No
+            safe_excel_value(item.get("word", "")),
+            safe_excel_value(item.get("pos", "")),
+            safe_excel_value(item.get("level", "")),
+            safe_excel_value(item.get("bengali", "")),
+            safe_excel_value(item.get("definition", "")),
+            safe_excel_value(item.get("synonyms", "")),
+            safe_excel_value(item.get("antonyms", "")),
+            safe_excel_value(item.get("example", "")),
+            safe_excel_value(item.get("category", ""))
+        ]
+        for col, val in enumerate(row_data, 1):
+            cell = ws.cell(row=idx, column=col)
+            cell.value = val
+            cell.border = border
+            cell.fill = even if idx % 2 == 0 else white
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+            if col in [1, 3, 4]:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            # Color‑code difficulty
+            if col == 4:
+                level = str(val).strip().capitalize()
+                if level == "Basic":
+                    cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
+                    cell.font = Font(bold=True, color="2E7D32")
+                elif level == "Intermediate":
+                    cell.fill = PatternFill(start_color="FFF8E1", end_color="FFF8E1", fill_type="solid")
+                    cell.font = Font(bold=True, color="F57F17")
+                elif level == "Advanced":
+                    cell.fill = PatternFill(start_color="FFEBEE", end_color="FFEBEE", fill_type="solid")
+                    cell.font = Font(bold=True, color="C62828")
+
+    # Column widths
+    widths = [8, 20, 15, 16, 28, 35, 32, 30, 45, 22]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    ws.auto_filter.ref = f"A4:J{len(vocab_list)+4}"
+    ws.freeze_panes = "B5"
+
+    # ---------- Sheet 2: Summary ----------
+    ws2 = wb.create_sheet("BCS & Job Prep Summary")
+    ws2.merge_cells("A1:G1")
+    ws2["A1"] = "DAILY STAR VOCABULARY ANALYSIS - BCS & JOB EXAM FOCUS"
+    ws2["A1"].font = Font(size=16, bold=True, color="FFFFFF")
+    ws2["A1"].fill = navy
+    ws2["A1"].alignment = Alignment(horizontal="center")
+
+    # Level breakdown (static counts)
+    level_counts = {"Basic": 0, "Intermediate": 0, "Advanced": 0}
+    for item in vocab_list:
+        lvl = item.get("level", "Basic")
+        level_counts[lvl] = level_counts.get(lvl, 0) + 1
+
+    ws2["A3"] = "VOCABULARY BREAKDOWN BY LEVEL"
+    ws2["A3"].font = Font(bold=True, size=12)
+    ws2["A4"] = "Difficulty Level"
+    ws2["B4"] = "Word Count"
+    ws2["C4"] = "% of Total"
+    row = 5
+    for lvl in ["Basic", "Intermediate", "Advanced"]:
+        ws2[f"A{row}"] = lvl
+        ws2[f"B{row}"] = level_counts.get(lvl, 0)
+        ws2[f"C{row}"] = level_counts.get(lvl, 0) / len(vocab_list) if vocab_list else 0
+        ws2[f"C{row}"].number_format = "0.0%"
+        row += 1
+    ws2[f"A{row}"] = "Total Vocabulary"
+    ws2[f"B{row}"] = f"=SUM(B5:B7)"
+    ws2[f"C{row}"] = "=SUM(C5:C7)"
+
+    # Category breakdown (for display)
+    cat_counts = {}
+    for item in vocab_list:
+        cat = item.get("category", "Uncategorized")
+        cat_counts[cat] = cat_counts.get(cat, 0) + 1
+    # Put on the right side (columns E-G)
+    ws2["E3"] = "VOCABULARY DISTRIBUTION BY NEWSPAPER SECTOR"
+    ws2["E3"].font = Font(bold=True, size=12)
+    ws2["E4"] = "Sector / Category"
+    ws2["F4"] = "Word Count"
+    ws2["G4"] = "Target Job Exams"
+    row = 5
+    # Predefined order for clarity
+    category_order = ["Politics & Governance", "Economy & Finance", "Law & Human Rights",
+                      "Public Health & Env", "Crime & Legal Affairs", "Social & Policy Issues"]
+    for cat in category_order:
+        count = cat_counts.get(cat, 0)
+        if count > 0:
+            ws2[f"E{row}"] = cat
+            ws2[f"F{row}"] = count
+            # Target exams based on category (simplified)
+            if "Politics" in cat:
+                ws2[f"G{row}"] = "BCS Admin, Judiciary, Secretariat"
+            elif "Economy" in cat or "Finance" in cat:
+                ws2[f"G{row}"] = "Bangladesh Bank, Commercial Banks"
+            elif "Law" in cat or "Rights" in cat:
+                ws2[f"G{row}"] = "Judicial Service, Assistant Judge, Police"
+            elif "Health" in cat or "Env" in cat:
+                ws2[f"G{row}"] = "Medical Officer, BCS General Cadre"
+            elif "Crime" in cat:
+                ws2[f"G{row}"] = "BCS Police, ACC"
+            else:
+                ws2[f"G{row}"] = "BCS Written, General Knowledge"
+            row += 1
+
+    # Guidelines
+    ws2.merge_cells("A10:G10")
+    ws2["A10"] = "BANGLADESHI JOB EXAM PREPARATION GUIDELINES (BCS, BANK, NTRCA, PRIMARY)"
+    ws2["A10"].font = Font(bold=True, size=12)
+    guidelines = [
+        "1. BCS Preliminary Strategy: Daily Star editorials contain high-frequency synonyms/antonyms asked directly in BCS Preliminary (20 Marks English). Focus on Advanced words.",
+        "2. BCS Written Strategy: Words like 'Rupture', 'Reimagine', 'Transboundary', 'Exacerbate' enhance the standard of translation and passage writing in BCS Written.",
+        "3. Bank Recruitment Exams: Bank exams heavily emphasize vocabulary in context, reading comprehension, and fill-in-the-blanks. Learn synonyms and precise nuances.",
+        "4. Revision Technique: Practice making sentences using 5 new Daily Star vocabulary words daily to retain Bengali meaning and appropriate usage."
+    ]
+    for i, text in enumerate(guidelines, start=11):
+        ws2.cell(row=i, column=1, value=text).alignment = Alignment(wrap_text=True)
+
+    # ---------- Sheet 3: Practice Test ----------
+    if mcqs and isinstance(mcqs, list) and all(isinstance(q, dict) for q in mcqs):
+        ws3 = wb.create_sheet("BCS & Bank Practice Set")
+        ws3.merge_cells("A1:G1")
+        ws3["A1"] = "DAILY STAR VOCABULARY PRACTICE SET (JOB EXAM MODEL TEST)"
+        ws3["A1"].font = Font(size=14, bold=True)
+        ws3["A1"].alignment = Alignment(horizontal="center")
+
+        ws3.merge_cells("A2:G2")
+        ws3["A2"] = "Test your vocabulary knowledge for upcoming BCS Preliminary, Combined Bank Officers, and Primary Teacher exams."
+        ws3["A2"].font = Font(size=10, italic=True)
+        ws3["A2"].alignment = Alignment(horizontal="center")
+
+        headers_mcq = ["Q. No", "Question / Contextual Sentence", "Option A", "Option B", "Option C", "Option D", "Correct Answer & Explanation"]
+        for col, h in enumerate(headers_mcq, 1):
+            cell = ws3.cell(row=4, column=col)
+            cell.value = h
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+
+        for i, q in enumerate(mcqs[:10], 5):
+            ws3.cell(row=i, column=1, value=i-4).alignment = Alignment(horizontal="center")
+            ws3.cell(row=i, column=2, value=safe_excel_value(q.get("question", ""))).alignment = Alignment(wrap_text=True)
+            opts = q.get("options", [])
+            for j, opt in enumerate(opts, 3):
+                ws3.cell(row=i, column=j, value=safe_excel_value(opt))
+            ws3.cell(row=i, column=7, value=safe_excel_value(q.get("answer", "") + " — " + q.get("explanation", ""))).alignment = Alignment(wrap_text=True)
+
+        # Column widths
+        ws3.column_dimensions["A"].width = 6
+        ws3.column_dimensions["B"].width = 40
+        ws3.column_dimensions["C"].width = 20
+        ws3.column_dimensions["D"].width = 20
+        ws3.column_dimensions["E"].width = 20
+        ws3.column_dimensions["F"].width = 20
+        ws3.column_dimensions["G"].width = 40
+        ws3.freeze_panes = "A5"
+    else:
+        # If no MCQs, create a placeholder sheet
+        ws3 = wb.create_sheet("BCS & Bank Practice Set")
+        ws3.merge_cells("A1:F1")
+        ws3["A1"] = "Practice Test – Not Generated (API issue)"
+        ws3["A1"].font = Font(size=14, bold=True)
+        ws3["A3"] = "No MCQs were generated due to a temporary issue. Try again tomorrow."
+
+    wb.save(EXCEL_FILE)
+    return EXCEL_FILE
 
 # --------------------------------------------------------------
-# BUILD PDF – PROFESSIONAL WITH BENGALI FONT
+# BUILD PDF – PROFESSIONAL WITH BENGALI FONT (FIXED)
 # --------------------------------------------------------------
 
 def build_pdf(vocab_list, mcqs, summary, date_str):
@@ -292,8 +496,12 @@ def build_pdf(vocab_list, mcqs, summary, date_str):
 
     if summary:
         story.append(Paragraph("📰 Today's Summary", heading_style))
-        # Replace newlines with <br/> and bold markers
-        summary_clean = summary.replace('\n', '<br/>').replace('**', '<b>').replace('**', '</b>')
+        # Clean summary: remove all markdown bold markers, only convert newlines to <br/>
+        summary_clean = summary.replace('\n', '<br/>')
+        # Remove any remaining '**' characters (they might appear from bold markers)
+        summary_clean = summary_clean.replace('**', '')
+        # Also remove any stray '*' that might be misinterpreted
+        summary_clean = summary_clean.replace('*', '')
         story.append(Paragraph(summary_clean, normal_style))
         story.append(Spacer(1, 0.2*inch))
 
