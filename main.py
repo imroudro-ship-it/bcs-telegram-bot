@@ -76,7 +76,7 @@ def save_history(words):
         json.dump({"words": words}, f)
 
 # --------------------------------------------------------------
-# AI CALLS (unchanged)
+# AI CALLS
 # --------------------------------------------------------------
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
@@ -187,25 +187,216 @@ Each object must have keys: question, options, answer, explanation.
         return []
 
 # --------------------------------------------------------------
-# BUILD EXCEL (unchanged – keep your existing build_excel)
+# BUILD EXCEL – GEMINI STYLE (3 SHEETS)
 # --------------------------------------------------------------
 
 def build_excel(vocab_list, mcqs):
-    # ... (your existing build_excel code – same as before) ...
-    # I'll assume you have it. If not, I'll include it fully in the final answer.
-    pass
+    wb = openpyxl.Workbook()
+
+    # ---------- Sheet 1: Vocabulary ----------
+    ws = wb.active
+    ws.title = "Daily Star Vocabulary"
+
+    navy = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    light_navy = PatternFill(start_color="2F5597", end_color="2F5597", fill_type="solid")
+    even = PatternFill(start_color="F2F5F9", end_color="F2F5F9", fill_type="solid")
+    white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+    border = Border(left=Side(style="thin"), right=Side(style="thin"),
+                    top=Side(style="thin"), bottom=Side(style="thin"))
+
+    ws.merge_cells("A1:J1")
+    ws["A1"] = "THE DAILY STAR - DAILY VOCABULARY BANK (BCS & JOB PREP SPECIAL)"
+    ws["A1"].font = Font(size=16, bold=True, color="FFFFFF")
+    ws["A1"].fill = navy
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.merge_cells("A2:J2")
+    ws["A2"] = "Curated from Today's Headlines, Editorials & Reports | Includes Meanings, Parts of Speech, Bengali Translations & Exam Examples"
+    ws["A2"].font = Font(size=10, italic=True, color="FFFFFF")
+    ws["A2"].fill = light_navy
+    ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
+
+    headers = ["SL No", "Word / Idiom", "Part of Speech", "Difficulty Level",
+               "Bengali Meaning (বাংলা অর্থ)", "English Definition",
+               "Synonyms", "Antonyms", "Contextual Example (Daily Star)", "Category / Topic"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col)
+        cell.value = h
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = navy
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
+
+    for idx, item in enumerate(vocab_list, 5):
+        ws.row_dimensions[idx].height = 26
+        row_data = [
+            idx - 4,
+            safe_excel_value(item.get("word", "")),
+            safe_excel_value(item.get("pos", "")),
+            safe_excel_value(item.get("level", "")),
+            safe_excel_value(item.get("bengali", "")),
+            safe_excel_value(item.get("definition", "")),
+            safe_excel_value(item.get("synonyms", "")),
+            safe_excel_value(item.get("antonyms", "")),
+            safe_excel_value(item.get("example", "")),
+            safe_excel_value(item.get("category", ""))
+        ]
+        for col, val in enumerate(row_data, 1):
+            cell = ws.cell(row=idx, column=col)
+            cell.value = val
+            cell.border = border
+            cell.fill = even if idx % 2 == 0 else white
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+            if col in [1, 3, 4]:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            if col == 4:
+                level = str(val).strip().capitalize()
+                if level == "Basic":
+                    cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
+                    cell.font = Font(bold=True, color="2E7D32")
+                elif level == "Intermediate":
+                    cell.fill = PatternFill(start_color="FFF8E1", end_color="FFF8E1", fill_type="solid")
+                    cell.font = Font(bold=True, color="F57F17")
+                elif level == "Advanced":
+                    cell.fill = PatternFill(start_color="FFEBEE", end_color="FFEBEE", fill_type="solid")
+                    cell.font = Font(bold=True, color="C62828")
+
+    widths = [8, 20, 15, 16, 28, 35, 32, 30, 45, 22]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    ws.auto_filter.ref = f"A4:J{len(vocab_list)+4}"
+    ws.freeze_panes = "B5"
+
+    # ---------- Sheet 2: Summary ----------
+    ws2 = wb.create_sheet("BCS & Job Prep Summary")
+    ws2.merge_cells("A1:G1")
+    ws2["A1"] = "DAILY STAR VOCABULARY ANALYSIS - BCS & JOB EXAM FOCUS"
+    ws2["A1"].font = Font(size=16, bold=True, color="FFFFFF")
+    ws2["A1"].fill = navy
+    ws2["A1"].alignment = Alignment(horizontal="center")
+
+    level_counts = {"Basic": 0, "Intermediate": 0, "Advanced": 0}
+    for item in vocab_list:
+        lvl = item.get("level", "Basic")
+        level_counts[lvl] = level_counts.get(lvl, 0) + 1
+
+    ws2["A3"] = "VOCABULARY BREAKDOWN BY LEVEL"
+    ws2["A3"].font = Font(bold=True, size=12)
+    ws2["A4"] = "Difficulty Level"
+    ws2["B4"] = "Word Count"
+    ws2["C4"] = "% of Total"
+    row = 5
+    for lvl in ["Basic", "Intermediate", "Advanced"]:
+        ws2[f"A{row}"] = lvl
+        ws2[f"B{row}"] = level_counts.get(lvl, 0)
+        ws2[f"C{row}"] = level_counts.get(lvl, 0) / len(vocab_list) if vocab_list else 0
+        ws2[f"C{row}"].number_format = "0.0%"
+        row += 1
+    ws2[f"A{row}"] = "Total Vocabulary"
+    ws2[f"B{row}"] = f"=SUM(B5:B7)"
+    ws2[f"C{row}"] = "=SUM(C5:C7)"
+
+    cat_counts = {}
+    for item in vocab_list:
+        cat = item.get("category", "Uncategorized")
+        cat_counts[cat] = cat_counts.get(cat, 0) + 1
+    ws2["E3"] = "VOCABULARY DISTRIBUTION BY NEWSPAPER SECTOR"
+    ws2["E3"].font = Font(bold=True, size=12)
+    ws2["E4"] = "Sector / Category"
+    ws2["F4"] = "Word Count"
+    ws2["G4"] = "Target Job Exams"
+    row = 5
+    category_order = ["Politics & Governance", "Economy & Finance", "Law & Human Rights",
+                      "Public Health & Env", "Crime & Legal Affairs", "Social & Policy Issues"]
+    for cat in category_order:
+        count = cat_counts.get(cat, 0)
+        if count > 0:
+            ws2[f"E{row}"] = cat
+            ws2[f"F{row}"] = count
+            if "Politics" in cat:
+                ws2[f"G{row}"] = "BCS Admin, Judiciary, Secretariat"
+            elif "Economy" in cat or "Finance" in cat:
+                ws2[f"G{row}"] = "Bangladesh Bank, Commercial Banks"
+            elif "Law" in cat or "Rights" in cat:
+                ws2[f"G{row}"] = "Judicial Service, Assistant Judge, Police"
+            elif "Health" in cat or "Env" in cat:
+                ws2[f"G{row}"] = "Medical Officer, BCS General Cadre"
+            elif "Crime" in cat:
+                ws2[f"G{row}"] = "BCS Police, ACC"
+            else:
+                ws2[f"G{row}"] = "BCS Written, General Knowledge"
+            row += 1
+
+    ws2.merge_cells("A10:G10")
+    ws2["A10"] = "BANGLADESHI JOB EXAM PREPARATION GUIDELINES (BCS, BANK, NTRCA, PRIMARY)"
+    ws2["A10"].font = Font(bold=True, size=12)
+    guidelines = [
+        "1. BCS Preliminary Strategy: Daily Star editorials contain high-frequency synonyms/antonyms asked directly in BCS Preliminary (20 Marks English). Focus on Advanced words.",
+        "2. BCS Written Strategy: Words like 'Rupture', 'Reimagine', 'Transboundary', 'Exacerbate' enhance the standard of translation and passage writing in BCS Written.",
+        "3. Bank Recruitment Exams: Bank exams heavily emphasize vocabulary in context, reading comprehension, and fill-in-the-blanks. Learn synonyms and precise nuances.",
+        "4. Revision Technique: Practice making sentences using 5 new Daily Star vocabulary words daily to retain Bengali meaning and appropriate usage."
+    ]
+    for i, text in enumerate(guidelines, start=11):
+        ws2.cell(row=i, column=1, value=text).alignment = Alignment(wrap_text=True)
+
+    # ---------- Sheet 3: Practice Test ----------
+    if mcqs and isinstance(mcqs, list) and all(isinstance(q, dict) for q in mcqs):
+        ws3 = wb.create_sheet("BCS & Bank Practice Set")
+        ws3.merge_cells("A1:G1")
+        ws3["A1"] = "DAILY STAR VOCABULARY PRACTICE SET (JOB EXAM MODEL TEST)"
+        ws3["A1"].font = Font(size=14, bold=True)
+        ws3["A1"].alignment = Alignment(horizontal="center")
+
+        ws3.merge_cells("A2:G2")
+        ws3["A2"] = "Test your vocabulary knowledge for upcoming BCS Preliminary, Combined Bank Officers, and Primary Teacher exams."
+        ws3["A2"].font = Font(size=10, italic=True)
+        ws3["A2"].alignment = Alignment(horizontal="center")
+
+        headers_mcq = ["Q. No", "Question / Contextual Sentence", "Option A", "Option B", "Option C", "Option D", "Correct Answer & Explanation"]
+        for col, h in enumerate(headers_mcq, 1):
+            cell = ws3.cell(row=4, column=col)
+            cell.value = h
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+
+        for i, q in enumerate(mcqs[:10], 5):
+            ws3.cell(row=i, column=1, value=i-4).alignment = Alignment(horizontal="center")
+            ws3.cell(row=i, column=2, value=safe_excel_value(q.get("question", ""))).alignment = Alignment(wrap_text=True)
+            opts = q.get("options", [])
+            for j, opt in enumerate(opts, 3):
+                ws3.cell(row=i, column=j, value=safe_excel_value(opt))
+            ws3.cell(row=i, column=7, value=safe_excel_value(q.get("answer", "") + " — " + q.get("explanation", ""))).alignment = Alignment(wrap_text=True)
+
+        ws3.column_dimensions["A"].width = 6
+        ws3.column_dimensions["B"].width = 40
+        ws3.column_dimensions["C"].width = 20
+        ws3.column_dimensions["D"].width = 20
+        ws3.column_dimensions["E"].width = 20
+        ws3.column_dimensions["F"].width = 20
+        ws3.column_dimensions["G"].width = 40
+        ws3.freeze_panes = "A5"
+    else:
+        ws3 = wb.create_sheet("BCS & Bank Practice Set")
+        ws3.merge_cells("A1:F1")
+        ws3["A1"] = "Practice Test – Not Generated (API issue)"
+        ws3["A1"].font = Font(size=14, bold=True)
+        ws3["A3"] = "No MCQs were generated due to a temporary issue. Try again tomorrow."
+
+    wb.save(EXCEL_FILE)
+    return EXCEL_FILE
 
 # --------------------------------------------------------------
-# BUILD HTML – IBA COMPENDIUM STYLE (FIXED)
+# BUILD HTML – IBA COMPENDIUM STYLE
 # --------------------------------------------------------------
 
 def build_html(vocab_list, mcqs, summary, date_str):
     html_path = DATA_DIR / f"Vocabulary_{date_str}.html"
 
-    # Pre‑process summary to replace newlines with <br> (outside f‑string)
     summary_br = summary.replace('\n', '<br>')
 
-    # Group vocabulary by category
     categories = {}
     for item in vocab_list:
         cat = item.get('category', 'Miscellaneous')
@@ -215,7 +406,6 @@ def build_html(vocab_list, mcqs, summary, date_str):
 
     sorted_cats = sorted(categories.items())
 
-    # Build category tables
     category_html = ""
     for cat, words in sorted_cats:
         category_html += f"""
@@ -249,7 +439,6 @@ def build_html(vocab_list, mcqs, summary, date_str):
         </table>
         """
 
-    # Build MCQs
     mcq_html = ""
     if mcqs:
         mcq_html += """
@@ -269,7 +458,6 @@ def build_html(vocab_list, mcqs, summary, date_str):
             """
         mcq_html += "</div>"
 
-    # Full HTML template (no backslashes inside f‑string)
     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -390,7 +578,6 @@ def build_html(vocab_list, mcqs, summary, date_str):
 </head>
 <body>
 <div class="container">
-    <!-- Cover -->
     <div class="cover">
         <h1>📘 Daily Vocabulary Bank</h1>
         <div class="date">📅 {date_str}</div>
@@ -399,16 +586,13 @@ def build_html(vocab_list, mcqs, summary, date_str):
         </div>
     </div>
 
-    <!-- Summary -->
     <div class="summary">
         <h3 style="margin-top:0;">📰 Today's Summary</h3>
         {summary_br}
     </div>
 
-    <!-- Vocabulary by Category -->
     {category_html}
 
-    <!-- MCQs -->
     {mcq_html}
 
     <div class="footer">
@@ -423,7 +607,7 @@ def build_html(vocab_list, mcqs, summary, date_str):
     return html_path
 
 # --------------------------------------------------------------
-# MAIN JOB – WITH TELEGRAM DEBUGGING
+# MAIN JOB – WITH FILE CHECKS
 # --------------------------------------------------------------
 
 async def run_daily_job():
@@ -444,13 +628,19 @@ async def run_daily_job():
     print(f"   Generated {len(mcqs)} MCQs.")
 
     print("📊 Building Excel file...")
-    build_excel(vocab, mcqs)
-    print(f"   Excel saved to {EXCEL_FILE}")
+    try:
+        build_excel(vocab, mcqs)
+        print(f"   Excel saved to {EXCEL_FILE}")
+    except Exception as e:
+        print(f"   ❌ Error building Excel: {e}")
 
     date_str = datetime.now(TIMEZONE).strftime("%Y-%m-%d")
     print("📄 Building HTML file...")
-    html_path = build_html(vocab, mcqs, summary, date_str)
-    print(f"   HTML saved to {html_path}")
+    try:
+        html_path = build_html(vocab, mcqs, summary, date_str)
+        print(f"   HTML saved to {html_path}")
+    except Exception as e:
+        print(f"   ❌ Error building HTML: {e}")
 
     save_history(past + [w["word"] for w in vocab])
     print("💾 History updated.")
@@ -461,15 +651,21 @@ async def run_daily_job():
         try:
             bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-            # Send Excel
-            with open(EXCEL_FILE, "rb") as f:
-                await bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=f, caption="📊 Daily Vocabulary Bank (Excel)")
+            # Check if Excel exists before sending
+            if EXCEL_FILE.exists():
+                with open(EXCEL_FILE, "rb") as f:
+                    await bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=f, caption="📊 Daily Vocabulary Bank (Excel)")
                 print("   ✅ Excel sent.")
+            else:
+                print("   ⚠️ Excel file not found – skipping.")
 
-            # Send HTML
-            with open(html_path, "rb") as f:
-                await bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=f, caption="📄 Daily Vocabulary Bank (HTML – open on any device)")
+            # Check if HTML exists
+            if html_path.exists():
+                with open(html_path, "rb") as f:
+                    await bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=f, caption="📄 Daily Vocabulary Bank (HTML – open on any device)")
                 print("   ✅ HTML sent.")
+            else:
+                print("   ⚠️ HTML file not found – skipping.")
 
             # Send summary
             if not summary or len(summary.strip()) < 10:
@@ -483,10 +679,6 @@ async def run_daily_job():
         print("⚠️ Telegram credentials missing. Skipping send.")
 
     print("✅ Job done – Excel and HTML generated.")
-
-# --------------------------------------------------------------
-# ENTRY POINT
-# --------------------------------------------------------------
 
 if __name__ == "__main__":
     asyncio.run(run_daily_job())
