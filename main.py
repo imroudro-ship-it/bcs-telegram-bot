@@ -395,8 +395,10 @@ def build_excel(vocab_list, mcqs):
 def build_html(vocab_list, mcqs, summary, date_str):
     html_path = DATA_DIR / f"Vocabulary_{date_str}.html"
 
+    # Pre‑process summary
     summary_br = summary.replace('\n', '<br>')
 
+    # Group vocabulary by category
     categories = {}
     for item in vocab_list:
         cat = item.get('category', 'Miscellaneous')
@@ -406,198 +408,354 @@ def build_html(vocab_list, mcqs, summary, date_str):
 
     sorted_cats = sorted(categories.items())
 
+    # Build category sections
     category_html = ""
     for cat, words in sorted_cats:
         category_html += f"""
-        <h2 class="category-title">{cat}</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Word</th>
-                    <th>Bengali Meaning</th>
-                    <th>POS</th>
-                    <th>Synonyms</th>
-                    <th>Antonyms</th>
-                    <th>Example</th>
-                </tr>
-            </thead>
-            <tbody>
+        <div class="category-section">
+            <div class="category-header">
+                <h2>{cat}</h2>
+                <span class="word-count">{len(words)} words</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Bengali</th>
+                            <th>POS</th>
+                            <th>Synonyms</th>
+                            <th>Antonyms</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
         """
         for w in words:
             category_html += f"""
-                <tr>
-                    <td><strong>{w.get('word', '')}</strong></td>
-                    <td>{w.get('bengali', '')}</td>
-                    <td>{w.get('pos', '')}</td>
-                    <td>{w.get('synonyms', '')}</td>
-                    <td>{w.get('antonyms', '')}</td>
-                    <td>{w.get('example', '')}</td>
-                </tr>
+                        <tr>
+                            <td class="word-cell"><strong>{w.get('word', '')}</strong></td>
+                            <td class="bengali-cell">{w.get('bengali', '')}</td>
+                            <td>{w.get('pos', '')}</td>
+                            <td>{w.get('synonyms', '')}</td>
+                            <td>{w.get('antonyms', '')}</td>
+                            <td class="example-cell">{w.get('example', '')}</td>
+                        </tr>
             """
         category_html += """
-            </tbody>
-        </table>
+                    </tbody>
+                </table>
+            </div>
+        </div>
         """
 
+    # Build MCQs
     mcq_html = ""
     if mcqs:
-        mcq_html += """
+        mcq_html = """
         <div class="mcq-section">
-            <h1>📝 Practice Test (10 MCQs)</h1>
+            <div class="section-header">
+                <h2>📝 Practice Test</h2>
+                <span class="badge">10 Questions</span>
+            </div>
         """
         for i, q in enumerate(mcqs[:10], 1):
-            options_html = "".join(f"<li>{opt}</li>" for opt in q.get('options', []))
+            options_html = "".join(f'<li class="option">{opt}</li>' for opt in q.get('options', []))
             mcq_html += f"""
-            <div class="mcq">
-                <p><strong>{i}. {q['question']}</strong></p>
-                <ul>
+            <div class="mcq-card">
+                <div class="mcq-question">
+                    <span class="q-number">{i}.</span>
+                    <span>{q['question']}</span>
+                </div>
+                <ul class="options-list">
                     {options_html}
                 </ul>
-                <p><strong>✅ Answer:</strong> {q['answer']} – {q['explanation']}</p>
+                <div class="mcq-answer">
+                    <strong>✅ Answer:</strong> {q['answer']} – {q['explanation']}
+                </div>
             </div>
             """
-        mcq_html += "</div>"
+        mcq_html += """
+        </div>
+        """
 
+    # Full HTML
     html_content = f"""<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Daily Vocabulary – {date_str}</title>
     <style>
+        /* ── Reset & Base ── */
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
         body {{
-            font-family: 'Segoe UI', 'Noto Sans Bengali', Arial, sans-serif;
-            margin: 20px;
-            background: #f4f6f9;
-            color: #1e2a3a;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans Bengali', sans-serif;
+            background: #f0f4f8;
+            color: #1e293b;
+            padding: 20px;
+            line-height: 1.5;
         }}
         .container {{
-            max-width: 1100px;
-            margin: auto;
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            max-width: 1200px;
+            margin: 0 auto;
         }}
-        .cover {{
-            text-align: center;
-            padding: 40px 0;
-            border-bottom: 3px solid #1F4E78;
+
+        /* ── Header / Hero ── */
+        .hero {{
+            background: linear-gradient(135deg, #0f2b4b, #1a4a7a);
+            color: #ffffff;
+            border-radius: 16px;
+            padding: 40px 30px;
             margin-bottom: 30px;
+            box-shadow: 0 8px 30px rgba(15, 43, 75, 0.25);
         }}
-        .cover h1 {{
+        .hero h1 {{
             font-size: 28px;
-            color: #1F4E78;
-            margin-bottom: 5px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
         }}
-        .cover .date {{
-            font-size: 18px;
-            color: #555;
+        .hero .date {{
+            font-size: 16px;
+            opacity: 0.8;
+            margin-top: 6px;
         }}
-        .cover .stats {{
+        .hero .stats {{
+            display: flex;
+            gap: 24px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }}
+        .hero .stat-item {{
+            background: rgba(255,255,255,0.12);
+            padding: 6px 16px;
+            border-radius: 40px;
             font-size: 14px;
-            color: #777;
-            margin-top: 10px;
+            font-weight: 500;
         }}
-        .summary {{
-            background: #eef3f9;
-            padding: 15px 20px;
-            border-radius: 8px;
+        .hero .stat-item span {{
+            font-weight: 700;
+        }}
+
+        /* ── Summary Card ── */
+        .summary-card {{
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 24px 28px;
             margin-bottom: 30px;
-            font-size: 1.05em;
-            line-height: 1.6;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border-left: 5px solid #1a4a7a;
+        }}
+        .summary-card h3 {{
+            font-size: 16px;
+            color: #1a4a7a;
+            margin-bottom: 10px;
+        }}
+        .summary-card p {{
+            font-size: 15px;
+            color: #334155;
+            line-height: 1.7;
             white-space: pre-wrap;
         }}
-        .category-title {{
-            color: #1F4E78;
-            border-bottom: 2px solid #1F4E78;
-            padding-bottom: 8px;
-            margin-top: 35px;
-            font-size: 20px;
+
+        /* ── Category Sections ── */
+        .category-section {{
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px 24px 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }}
+        .category-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #e9edf2;
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }}
+        .category-header h2 {{
+            font-size: 18px;
+            font-weight: 600;
+            color: #0f2b4b;
+        }}
+        .word-count {{
+            font-size: 13px;
+            background: #e9edf2;
+            padding: 2px 14px;
+            border-radius: 40px;
+            color: #475569;
+            font-weight: 500;
+        }}
+
+        /* ── Tables ── */
+        .table-wrapper {{
+            overflow-x: auto;
         }}
         table {{
             width: 100%;
             border-collapse: collapse;
-            margin: 15px 0 30px 0;
-            font-size: 0.85em;
+            font-size: 14px;
         }}
-        th {{
-            background: #1F4E78;
-            color: white;
-            font-weight: bold;
-            padding: 10px 8px;
+        thead th {{
+            background: #f1f5f9;
+            color: #1e293b;
+            font-weight: 600;
+            padding: 10px 12px;
             text-align: left;
+            border-bottom: 2px solid #d1d9e6;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
         }}
-        td {{
-            padding: 8px 8px;
-            border: 1px solid #ddd;
+        tbody td {{
+            padding: 10px 12px;
+            border-bottom: 1px solid #e9edf2;
             vertical-align: top;
         }}
-        tr:nth-child(even) {{
-            background: #f9fafc;
+        tbody tr:hover {{
+            background: #f8fafc;
         }}
+        .word-cell {{
+            font-weight: 600;
+            color: #0f2b4b;
+        }}
+        .bengali-cell {{
+            color: #1e293b;
+        }}
+        .example-cell {{
+            font-style: italic;
+            color: #475569;
+            font-size: 13px;
+        }}
+
+        /* ── MCQs ── */
         .mcq-section {{
-            margin-top: 40px;
-            border-top: 3px solid #1F4E78;
-            padding-top: 20px;
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px 24px 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
         }}
-        .mcq {{
-            background: #f9fafc;
-            border-left: 4px solid #1F4E78;
-            padding: 12px 18px;
-            margin: 15px 0;
-            border-radius: 4px;
+        .section-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #e9edf2;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
         }}
-        .mcq ul {{
-            list-style-type: none;
-            padding-left: 20px;
-            margin: 5px 0;
+        .section-header h2 {{
+            font-size: 18px;
+            font-weight: 600;
+            color: #0f2b4b;
         }}
-        .mcq li {{
-            margin: 3px 0;
+        .badge {{
+            font-size: 13px;
+            background: #1a4a7a;
+            color: #fff;
+            padding: 2px 14px;
+            border-radius: 40px;
+            font-weight: 500;
         }}
+        .mcq-card {{
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 14px;
+            border-left: 4px solid #1a4a7a;
+        }}
+        .mcq-question {{
+            font-weight: 500;
+            margin-bottom: 8px;
+        }}
+        .q-number {{
+            color: #1a4a7a;
+            font-weight: 700;
+            margin-right: 6px;
+        }}
+        .options-list {{
+            list-style: none;
+            padding-left: 24px;
+            margin-bottom: 8px;
+        }}
+        .option {{
+            font-size: 14px;
+            color: #334155;
+            padding: 2px 0;
+        }}
+        .mcq-answer {{
+            font-size: 14px;
+            color: #0f2b4b;
+            padding-top: 6px;
+            border-top: 1px dashed #d1d9e6;
+        }}
+
+        /* ── Footer ── */
         .footer {{
             text-align: center;
-            margin-top: 40px;
-            font-size: 0.9em;
-            color: #777;
-            border-top: 1px solid #ddd;
-            padding-top: 15px;
+            margin-top: 30px;
+            font-size: 13px;
+            color: #94a3b8;
+            padding: 20px 0 10px;
+            border-top: 1px solid #e2e8f0;
+        }}
+
+        /* ── Responsive ── */
+        @media (max-width: 700px) {{
+            body {{ padding: 12px; }}
+            .hero {{ padding: 24px 18px; }}
+            .hero h1 {{ font-size: 22px; }}
+            .hero .stats {{ gap: 12px; }}
+            .hero .stat-item {{ font-size: 12px; padding: 4px 12px; }}
+            .category-section {{ padding: 14px 14px 18px; }}
+            .category-header h2 {{ font-size: 16px; }}
+            table {{ font-size: 12px; }}
+            thead th, tbody td {{ padding: 6px 8px; }}
+            .mcq-card {{ padding: 12px 14px; }}
+            .options-list {{ padding-left: 16px; }}
         }}
         @media print {{
-            body {{ background: white; margin: 0; }}
-            .container {{ box-shadow: none; border: none; }}
-            .mcq {{ break-inside: avoid; }}
-        }}
-        @media (max-width: 600px) {{
-            table {{ font-size: 0.7em; }}
-            td, th {{ padding: 4px; }}
-            .container {{ padding: 12px; }}
+            body {{ background: #fff; padding: 0; }}
+            .hero {{ box-shadow: none; }}
+            .category-section, .summary-card, .mcq-section {{ box-shadow: none; border: 1px solid #ddd; }}
         }}
     </style>
 </head>
 <body>
 <div class="container">
-    <div class="cover">
+
+    <!-- Hero -->
+    <div class="hero">
         <h1>📘 Daily Vocabulary Bank</h1>
-        <div class="date">📅 {date_str}</div>
+        <div class="date">{date_str}</div>
         <div class="stats">
-            {len(vocab_list)} words • {len(categories)} categories • 10 MCQs
+            <div class="stat-item">📚 <span>{len(vocab_list)}</span> words</div>
+            <div class="stat-item">📂 <span>{len(categories)}</span> categories</div>
+            <div class="stat-item">📝 <span>10</span> MCQs</div>
         </div>
     </div>
 
-    <div class="summary">
-        <h3 style="margin-top:0;">📰 Today's Summary</h3>
-        {summary_br}
+    <!-- Summary -->
+    <div class="summary-card">
+        <h3>📰 Today's Summary</h3>
+        <p>{summary_br}</p>
     </div>
 
+    <!-- Vocabulary by Category -->
     {category_html}
 
+    <!-- MCQs -->
     {mcq_html}
 
+    <!-- Footer -->
     <div class="footer">
         Generated automatically • Daily Star Vocabulary Bank • For BCS & Bank Exams
     </div>
+
 </div>
 </body>
 </html>
@@ -605,7 +763,6 @@ def build_html(vocab_list, mcqs, summary, date_str):
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html_content)
     return html_path
-
 # --------------------------------------------------------------
 # MAIN JOB – WITH FILE CHECKS
 # --------------------------------------------------------------
