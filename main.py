@@ -18,6 +18,15 @@ from openpyxl.utils import get_column_letter
 from telegram import Bot
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+# PDF libraries
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
 # ========== ENV ==========
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -27,6 +36,7 @@ TIMEZONE = pytz.timezone("Asia/Dhaka")
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 EXCEL_FILE = DATA_DIR / "Vocabulary_Bank.xlsx"
+PDF_FILE = DATA_DIR / "Vocabulary_Bank.pdf"   # we'll also include date
 HISTORY_FILE = "history.json"
 
 RSS_FEEDS = {
@@ -34,6 +44,26 @@ RSS_FEEDS = {
     "Dhaka Tribune": "https://www.dhakatribune.com/feed",
     "The Business Standard": "https://www.tbsnews.net/rss.xml",
 }
+
+# --------------------------------------------------------------
+# HELPER: Try to register a Bengali font if available
+# --------------------------------------------------------------
+def register_bengali_font():
+    try:
+        # Look for a common Bengali font on the system
+        font_paths = [
+            "/usr/share/fonts/truetype/noto/NotoSansBengali-Regular.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",  # fallback
+            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",  # macOS
+            "C:/Windows/Fonts/ArialUnicode.ttf",  # Windows
+        ]
+        for path in font_paths:
+            if os.path.exists(path):
+                pdfmetrics.registerFont(TTFont('BengaliFont', path))
+                return 'BengaliFont'
+    except:
+        pass
+    return 'Helvetica'  # fallback – may not show Bengali perfectly
 
 # --------------------------------------------------------------
 # HELPERS
@@ -404,6 +434,97 @@ def build_excel(vocab_list, mcqs):
     return EXCEL_FILE
 
 # --------------------------------------------------------------
+# BUILD PDF – MOBILE FRIENDLY
+# --------------------------------------------------------------
+
+def build_pdf(vocab_list, mcqs, summary, date_str):
+    pdf_path = DATA_DIR / f"Vocabulary_{date_str}.pdf"
+
+    # Try to use a Bengali font if available
+    bengali_font = register_bengali_font()
+    styles = getSampleStyleSheet()
+    # Create a custom style for Bengali content
+    bengali_style = ParagraphStyle(
+        'BengaliStyle',
+        parent=styles['Normal'],
+        fontName=bengali_font,
+        fontSize=10,
+        leading=12
+    )
+    # Title style
+    title_style = ParagraphStyle(
+        'TitleStyle',
+        parent=styles['Title'],
+        fontName=bengali_font,
+        fontSize=16,
+        alignment=1  # center
+    )
+    heading_style = ParagraphStyle(
+        'HeadingStyle',
+        parent=styles['Heading2'],
+        fontName=bengali_font,
+        fontSize=12,
+        spaceAfter=6
+    )
+
+    doc = SimpleDocTemplate(str(pdf_path), pagesize=A4,
+                            rightMargin=72, leftMargin=72,
+                            topMargin=72, bottomMargin=72)
+    story = []
+
+    # Title
+    story.append(Paragraph("BCS & Bank Job Preparation – Daily Vocabulary", title_style))
+    story.append(Paragraph(f"Date: {date_str}", bengali_style))
+    story.append(Spacer(1, 0.2*inch))
+
+    # Summary
+    if summary:
+        story.append(Paragraph("📰 Today's Summary", heading_style))
+        # Replace newlines with <br/> for reportlab
+        summary_clean = summary.replace('\n', '<br/>')
+        story.append(Paragraph(summary_clean, bengali_style))
+        story.append(Spacer(1, 0.2*inch))
+
+    # Vocabulary list (first 50 items to keep PDF compact)
+    story.append(Paragraph("📚 Vocabulary List (Top 50)", heading_style))
+    data = [['Word', 'Bengali', 'POS', 'Example']]
+    for item in vocab_list[:50]:
+        data.append([
+            item.get('word', ''),
+            item.get('bengali', ''),
+            item.get('pos', ''),
+            item.get('example', '')[:60] + '...' if len(item.get('example', '')) > 60 else item.get('example', '')
+        ])
+    t = Table(data, colWidths=[1.2*inch, 1.5*inch, 0.8*inch, 2.5*inch])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.grey),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('FONTNAME', (0,0), (-1,0), bengali_font),
+        ('FONTSIZE', (0,0), (-1,0), 10),
+        ('BOTTOMPADDING', (0,0), (-1,0), 8),
+        ('BACKGROUND', (0,1), (-1,-1), colors.beige),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('FONTNAME', (0,1), (-1,-1), bengali_font),
+        ('FONTSIZE', (0,1), (-1,-1), 9),
+    ]))
+    story.append(t)
+    story.append(PageBreak())
+
+    # Practice Test
+    if mcqs:
+        story.append(Paragraph("📝 Practice Test (10 MCQs)", heading_style))
+        for i, q in enumerate(mcqs[:10], 1):
+            story.append(Paragraph(f"<b>{i}. {q['question']}</b>", bengali_style))
+            for opt in q['options']:
+                story.append(Paragraph(f"   {opt}", bengali_style))
+            story.append(Paragraph(f"✅ <b>Answer:</b> {q['answer']} – {q['explanation']}", bengali_style))
+            story.append(Spacer(1, 0.1*inch))
+
+    doc.build(story)
+    return pdf_path
+
+# --------------------------------------------------------------
 # MAIN JOB
 # --------------------------------------------------------------
 
@@ -412,22 +533,31 @@ async def run_daily_job():
     headlines = fetch_headlines()
     past = load_history()
     vocab, summary = generate_vocab_and_summary(client, headlines, past)
-    mcqs = generate_mcqs(client, vocab)  # generate MCQs
+    mcqs = generate_mcqs(client, vocab)
     build_excel(vocab, mcqs)
+
+    # Generate PDF
+    date_str = datetime.now(TIMEZONE).strftime("%Y-%m-%d")
+    pdf_path = build_pdf(vocab, mcqs, summary, date_str)
+
+    # Save history
     save_history(past + [w["word"] for w in vocab])
 
     # Send via Telegram
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
         bot = Bot(token=TELEGRAM_BOT_TOKEN)
+        # Send Excel
         with open(EXCEL_FILE, "rb") as f:
-            await bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=f, caption="📊 Daily Vocabulary Bank (auto-generated)")
-
+            await bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=f, caption="📊 Daily Vocabulary Bank (Excel)")
+        # Send PDF
+        with open(pdf_path, "rb") as f:
+            await bot.send_document(chat_id=TELEGRAM_CHAT_ID, document=f, caption="📄 Daily Vocabulary Bank (PDF – mobile friendly)")
         # Send summary (ensure it's not empty)
         if not summary or len(summary.strip()) < 10:
-            summary = "আজকের সংক্ষিপ্ত সারাংশ তৈরি করা সম্ভব হয়নি। তবে ভোকাবুলারি এক্সেল ফাইলটি দেখুন।"
+            summary = "আজকের সংক্ষিপ্ত সারাংশ তৈরি করা সম্ভব হয়নি। তবে ভোকাবুলারি ফাইলগুলো দেখুন।"
         await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=f"📰 **Today's Summary**\n\n{summary}", parse_mode="Markdown")
 
-    print("✅ Job done.")
+    print("✅ Job done – Excel and PDF generated and sent.")
 
 # --------------------------------------------------------------
 # ENTRY POINT
