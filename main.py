@@ -44,21 +44,17 @@ def load_dictionary():
     try:
         with open(DICT_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-        # If it's already a dict, use it
         if isinstance(data, dict):
             bengali_dict = data
         elif isinstance(data, list):
-            # Try to convert list to dict
             converted = {}
             for item in data:
                 if isinstance(item, dict):
-                    # Look for English and Bengali keys (common variants)
                     eng = item.get("en") or item.get("English") or item.get("word") or item.get("eng")
                     ben = item.get("bn") or item.get("Bangla") or item.get("bengali") or item.get("meaning")
                     if eng and ben:
                         converted[eng] = ben
                 elif isinstance(item, list) and len(item) >= 2:
-                    # Assume [english, bengali]
                     converted[item[0]] = item[1]
             if converted:
                 bengali_dict = converted
@@ -95,7 +91,7 @@ def safe_excel_value(value):
         return str(value)
     return str(value)
 
-def fetch_headlines(limit=10):
+def fetch_headlines(limit=8):
     all_entries = []
     for source, url in RSS_FEEDS.items():
         try:
@@ -152,20 +148,20 @@ def get_bengali_from_dict(word):
     return None
 
 # --------------------------------------------------------------
-# AI CALL – TOKEN-EFFICIENT (15 WORDS + SUMMARY)
+# AI CALL – 40 WORDS + SUMMARY (NO REPEATS)
 # --------------------------------------------------------------
 
 @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=4, max=10),
        retry=retry_if_exception_type((groq.RateLimitError,)))
 def generate_vocab_and_summary(client, headlines_data, past_words):
     headlines_text = "\n".join([f"- {entry['source']}: {entry['headline']}" for entry in headlines_data])
-    exclude = ", ".join(past_words[-50:])
+    exclude = ", ".join(past_words[-80:])  # larger history to avoid repeats
 
     prompt = f"""
-You are a BCS/Bank exam mentor. Extract 15 vocabulary words from these headlines:
+You are a BCS/Bank exam mentor. Extract 40 vocabulary words from these headlines:
 {headlines_text}
 
-Avoid: {exclude}
+Do NOT repeat any of these words: {exclude}
 
 For each word, provide: sl, word, pos, level (Basic/Intermediate/Advanced), bengali, definition, synonyms, antonyms, example, category.
 Synonyms/antonyms as comma-separated strings.
@@ -179,7 +175,7 @@ Return JSON with keys: vocab_list, bengali_summary.
             {"role": "system", "content": "You are a lexicographer. Output valid JSON. Use accurate Bengali script."},
             {"role": "user", "content": prompt}
         ],
-        model="llama-3.1-8b-instant",  # active free model
+        model="llama-3.1-8b-instant",
         temperature=0.3,
         response_format={"type": "json_object"},
     )
@@ -697,11 +693,11 @@ async def run_daily_job():
     client = groq.Groq(api_key=GROQ_API_KEY)
 
     print("📰 Fetching headlines...")
-    headlines = fetch_headlines(limit=10)
+    headlines = fetch_headlines(limit=8)
     print(f"   Found {len(headlines)} headlines.")
 
     past = load_history()
-    print("🧠 Generating vocabulary and summary (15 words)...")
+    print("🧠 Generating vocabulary and summary (40 words)...")
     try:
         vocab, summary = generate_vocab_and_summary(client, headlines, past)
         print(f"   Generated {len(vocab)} words.")
