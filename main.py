@@ -34,6 +34,16 @@ RSS_FEEDS = {
     "The Business Standard": "https://www.tbsnews.net/rss.xml",
 }
 
+def safe_excel_value(value):
+    """Convert any value to an Excel-safe string."""
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value)
+    if isinstance(value, dict):
+        return str(value)
+    return str(value)
+
 def fetch_headlines():
     all_entries = []
     for source, url in RSS_FEEDS.items():
@@ -78,6 +88,7 @@ Today's headlines from Bangladeshi newspapers (with sources):
 - Do NOT repeat: {exclude}
 - For each word provide EXACTLY these keys:
   "sl", "word", "pos", "level", "bengali", "definition", "synonyms", "antonyms", "example", "category"
+- The synonyms and antonyms must be given as a comma-separated string (not a list).
 
 ### Task 2: Write a 5-7 bullet Bengali summary of the most important topics. Include the newspaper names.
 
@@ -85,7 +96,7 @@ Return JSON with keys: "vocab_list" and "bengali_summary".
 """
     response = client.chat.completions.create(
         messages=[
-            {"role": "system", "content": "You are an expert Bengali lexicographer. Always output valid JSON."},
+            {"role": "system", "content": "You are an expert Bengali lexicographer. Always output valid JSON. For synonyms and antonyms, use a comma-separated string, not a list."},
             {"role": "user", "content": prompt}
         ],
         model="llama-3.3-70b-versatile",
@@ -109,7 +120,7 @@ def build_excel(vocab_list):
         cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
     for idx, item in enumerate(vocab_list, 2):
         for col, key in enumerate(["sl", "word", "pos", "level", "bengali", "definition", "synonyms", "antonyms", "example", "category"], 1):
-            ws.cell(row=idx, column=col, value=item.get(key, ""))
+            ws.cell(row=idx, column=col, value=safe_excel_value(item.get(key, "")))
     wb.save(EXCEL_FILE)
     return EXCEL_FILE
 
