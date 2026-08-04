@@ -5,6 +5,9 @@
 def build_html(vocab_list, mcqs, summary, date_str):
     html_path = DATA_DIR / f"Vocabulary_{date_str}.html"
 
+    # Pre‑process summary to replace newlines with <br> (outside f‑string)
+    summary_br = summary.replace('\n', '<br>')
+
     # Group vocabulary by category
     categories = {}
     for item in vocab_list:
@@ -13,7 +16,6 @@ def build_html(vocab_list, mcqs, summary, date_str):
             categories[cat] = []
         categories[cat].append(item)
 
-    # Sort categories alphabetically
     sorted_cats = sorted(categories.items())
 
     # Build category tables
@@ -58,18 +60,20 @@ def build_html(vocab_list, mcqs, summary, date_str):
             <h1>📝 Practice Test (10 MCQs)</h1>
         """
         for i, q in enumerate(mcqs[:10], 1):
+            # Build options list without backslash in f‑string
+            options_html = "".join(f"<li>{opt}</li>" for opt in q.get('options', []))
             mcq_html += f"""
             <div class="mcq">
                 <p><strong>{i}. {q['question']}</strong></p>
                 <ul>
-                    {''.join(f'<li>{opt}</li>' for opt in q['options'])}
+                    {options_html}
                 </ul>
                 <p><strong>✅ Answer:</strong> {q['answer']} – {q['explanation']}</p>
             </div>
             """
         mcq_html += "</div>"
 
-    # Full HTML template
+    # Full HTML template (using f‑string, but no backslashes inside expressions)
     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -202,7 +206,7 @@ def build_html(vocab_list, mcqs, summary, date_str):
     <!-- Summary -->
     <div class="summary">
         <h3 style="margin-top:0;">📰 Today's Summary</h3>
-        {summary.replace('\n', '<br>')}
+        {summary_br}
     </div>
 
     <!-- Vocabulary by Category -->
