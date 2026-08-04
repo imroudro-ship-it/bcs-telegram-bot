@@ -119,7 +119,7 @@ def get_bengali_from_dict(word):
     return None
 
 # --------------------------------------------------------------
-# AI CALL – TOKEN-EFFICIENT (20 WORDS + SUMMARY)
+# AI CALL – TOKEN-EFFICIENT (15 WORDS + SUMMARY)
 # --------------------------------------------------------------
 
 @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=4, max=10),
@@ -129,7 +129,7 @@ def generate_vocab_and_summary(client, headlines_data, past_words):
     exclude = ", ".join(past_words[-50:])
 
     prompt = f"""
-You are a BCS/Bank exam mentor. Extract 20 vocabulary words from these headlines:
+You are a BCS/Bank exam mentor. Extract 15 vocabulary words from these headlines:
 {headlines_text}
 
 Avoid: {exclude}
@@ -146,7 +146,7 @@ Return JSON with keys: vocab_list, bengali_summary.
             {"role": "system", "content": "You are a lexicographer. Output valid JSON. Use accurate Bengali script."},
             {"role": "user", "content": prompt}
         ],
-        model="llama3-8b-8192",  # free, fast, token-efficient
+        model="llama-3.1-8b-instant",  # active free model
         temperature=0.3,
         response_format={"type": "json_object"},
     )
@@ -668,7 +668,7 @@ async def run_daily_job():
     print(f"   Found {len(headlines)} headlines.")
 
     past = load_history()
-    print("🧠 Generating vocabulary and summary (20 words)...")
+    print("🧠 Generating vocabulary and summary (15 words)...")
     try:
         vocab, summary = generate_vocab_and_summary(client, headlines, past)
         print(f"   Generated {len(vocab)} words.")
